@@ -68,7 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
       self.state.display = "🔃"
 
       self.show()
-      delay(1000) {
+      delay(1500) {
         self.hide()
       }
     }
