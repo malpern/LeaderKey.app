@@ -115,7 +115,7 @@ struct AdvancedPane: View {
       Settings.Section(title: "Activation", bottomDivider: true) {
         VStack(alignment: .leading) {
           Text(
-            "Pressing the global gshortcut key while Leader Key is active should …"
+            "Pressing the global shortcut key while Leader Key is active should …"
           )
 
           Picker(
