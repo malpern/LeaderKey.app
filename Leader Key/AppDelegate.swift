@@ -98,7 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
       }
     }
 
-    KeyboardShortcuts.onKeyUp(for: .activate) {
+    KeyboardShortcuts.onKeyDown(for: .activate) {
       if self.controller.window.isKeyWindow {
         switch Defaults[.reactivateBehavior] {
         case .hide:
