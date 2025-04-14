@@ -426,6 +426,12 @@ struct GroupRow: View {
       .action(
         Action(key: "a", type: .command, value: "ls")
       ),
+      .action(
+        Action(key: "c", type: .url, value: "raycast://confetti")
+      ),
+      .action(
+        Action(key: "g", type: .url, value: "https://google.com")
+      ),
 
       // Level 1 group with actions
       .group(

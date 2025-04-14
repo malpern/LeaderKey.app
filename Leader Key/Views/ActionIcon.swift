@@ -1,71 +1,58 @@
 import Defaults
+import Kingfisher
 import SwiftUI
 
 func actionIcon(item: ActionOrGroup, iconSize: NSSize) -> some View {
-  // MARK: - Custom icons
-  var iconPath: String? {
+  // Extract common properties
+  let (iconPath, type, value): (String?, Type?, String?) =
     switch item {
     case .action(let action):
-      return action.iconPath
+      (action.iconPath, action.type, action.value)
     case .group(let group):
-      return group.iconPath
+      (group.iconPath, nil, nil)
     }
-  }
 
-  if iconPath != nil && !iconPath!.isEmpty {
-    if iconPath!.hasSuffix(".app") {
-      return AnyView(AppIconImage(appPath: iconPath!, size: iconSize))
+  // Handle custom icon path if present
+  if let iconPath = iconPath, !iconPath.isEmpty {
+    if iconPath.hasSuffix(".app") {
+      return AnyView(AppIconImage(appPath: iconPath, size: iconSize))
     } else {
-      // SF Symbol
       return AnyView(
-        Image(systemName: iconPath!)
+        Image(systemName: iconPath)
           .foregroundStyle(.secondary)
           .frame(width: iconSize.width, height: iconSize.height, alignment: .center)
       )
     }
   }
 
-  // MARK: - Default for applications
-
-  var type: Type? {
-    switch item {
-    case .action(let action):
-      return action.type
+  // Handle type-specific icons
+  if let type = type {
+    switch type {
+    case .application:
+      return AnyView(AppIconImage(appPath: value ?? "", size: iconSize))
+    case .url:
+      return AnyView(FavIconImage(url: value ?? "", icon: "link"))
+    case .command:
+      return AnyView(
+        Image(systemName: "terminal")
+          .foregroundStyle(.secondary)
+          .frame(width: iconSize.width, height: iconSize.height, alignment: .center))
+    case .folder:
+      return AnyView(
+        Image(systemName: "folder")
+          .foregroundStyle(.secondary)
+          .frame(width: iconSize.width, height: iconSize.height, alignment: .center))
     default:
-      return nil
+      return AnyView(
+        Image(systemName: "questionmark")
+          .foregroundStyle(.secondary)
+          .frame(width: iconSize.width, height: iconSize.height, alignment: .center))
     }
   }
 
-  if type == .application {
-    var view: AnyView? {
-      switch item {
-      case .action(let action):
-        return AnyView(AppIconImage(appPath: action.value, size: iconSize))
-      default:
-        return nil  // should never be invoked
-      }
-    }
-    return view!
-  }
-
-  // MARK: - Default SF symbols
-  var icon: String {
-    switch item {
-    case .action(let action):
-      switch action.type {
-      case .application: return "macwindow"
-      case .url: return "link"
-      case .command: return "terminal"
-      case .folder: return "folder"
-      default: return "questionmark"
-      }
-    case .group:
-      return "folder"
-    }
-  }
-
+  // Default case for groups
   return AnyView(
-    Image(systemName: icon)
+    Image(systemName: "folder")
       .foregroundStyle(.secondary)
       .frame(width: iconSize.width, height: iconSize.height, alignment: .center)
   )
@@ -105,6 +92,35 @@ struct AppIconImage: View {
       return true
     }
     return resizedIcon
+  }
+}
+
+struct FavIconImage: View {
+  let url: String
+  let icon: String
+  let size: NSSize
+
+  init(url: String, icon: String, size: NSSize = NSSize(width: 24, height: 24)) {
+    self.url = "https://www.google.com/s2/favicons?sz=128&domain=\(url)"
+    self.size = size
+    self.icon = icon
+  }
+
+  var fallback: some View {
+    return Image(systemName: icon).foregroundStyle(.secondary)
+      .frame(width: size.width, height: size.height, alignment: .center)
+  }
+
+  var body: some View {
+    if url.starts(with: "http:") || url.starts(with: "https:") {
+      KFImage.url(URL(string: url)).placeholder({
+        fallback
+      }).resizable()
+        .padding(4)
+        .frame(width: size.width, height: size.height, alignment: .center)
+    } else {
+      fallback
+    }
   }
 }
 

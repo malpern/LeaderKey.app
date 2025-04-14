@@ -1,4 +1,5 @@
 import Defaults
+import Kingfisher
 import SwiftUI
 
 enum Cheatsheet {
