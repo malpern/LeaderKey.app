@@ -237,6 +237,7 @@ protocol Item {
   var type: Type { get }
   var label: String? { get }
   var displayName: String { get }
+  var iconPath: String? { get set }
 }
 
 struct Action: Item, Codable, Equatable {
@@ -244,6 +245,7 @@ struct Action: Item, Codable, Equatable {
   var type: Type
   var label: String?
   var value: String
+  var iconPath: String?
 
   var displayName: String {
     guard let labelValue = label else { return bestGuessDisplayName }
@@ -272,6 +274,7 @@ struct Group: Item, Codable, Equatable {
   var key: String?
   var type: Type = .group
   var label: String?
+  var iconPath: String?
   var actions: [ActionOrGroup]
 
   var displayName: String {
@@ -291,22 +294,23 @@ enum ActionOrGroup: Codable, Equatable {
   case group(Group)
 
   private enum CodingKeys: String, CodingKey {
-    case key, type, value, actions, label
+    case key, type, value, actions, label, iconPath
   }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let key = try container.decode(String?.self, forKey: .key)
     let type = try container.decode(Type.self, forKey: .type)
-    let label = try container.decodeIfPresent(String.self, forKey: .label) ?? ""
+    let label = try container.decodeIfPresent(String.self, forKey: .label)
+    let iconPath = try container.decodeIfPresent(String.self, forKey: .iconPath)
 
     switch type {
     case .group:
       let actions = try container.decode([ActionOrGroup].self, forKey: .actions)
-      self = .group(Group(key: key, label: label, actions: actions))
+      self = .group(Group(key: key, label: label, iconPath: iconPath, actions: actions))
     default:
       let value = try container.decode(String.self, forKey: .value)
-      self = .action(Action(key: key, type: type, label: label, value: value))
+      self = .action(Action(key: key, type: type, label: label, value: value, iconPath: iconPath))
     }
   }
 
@@ -317,12 +321,18 @@ enum ActionOrGroup: Codable, Equatable {
       try container.encode(action.key, forKey: .key)
       try container.encode(action.type, forKey: .type)
       try container.encode(action.value, forKey: .value)
-      try container.encode(action.label, forKey: .label)
+      if action.label != nil && !action.label!.isEmpty {
+        try container.encodeIfPresent(action.label, forKey: .label)
+      }
+      try container.encodeIfPresent(action.iconPath, forKey: .iconPath)
     case .group(let group):
       try container.encode(group.key, forKey: .key)
       try container.encode(Type.group, forKey: .type)
       try container.encode(group.actions, forKey: .actions)
-      try container.encode(group.label, forKey: .label)
+      if group.label != nil && !group.label!.isEmpty {
+        try container.encodeIfPresent(group.label, forKey: .label)
+      }
+      try container.encodeIfPresent(group.iconPath, forKey: .iconPath)
     }
   }
 }

@@ -1,4 +1,6 @@
+import Defaults
 import SwiftUI
+import SymbolPicker
 
 let generalPadding: CGFloat = 8
 
@@ -131,6 +133,73 @@ struct ActionOrGroupRow: View {
   }
 }
 
+struct IconPickerMenu: View {
+  @Binding var item: ActionOrGroup
+  @State private var iconPickerPresented = false
+
+  var body: some View {
+    Menu {
+      Button("App Icon") {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.applicationBundle, .application]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        if panel.runModal() == .OK {
+          switch item {
+          case .action(var action):
+            action.iconPath = panel.url?.path
+            item = .action(action)
+          case .group(var group):
+            group.iconPath = panel.url?.path
+            item = .group(group)
+          }
+        }
+      }
+      Button("Symbol") {
+        iconPickerPresented = true
+      }
+      Divider()
+      Button("✕ Clear") {
+        switch item {
+        case .action(var action):
+          action.iconPath = nil
+          item = .action(action)
+        case .group(var group):
+          group.iconPath = nil
+          item = .group(group)
+        }
+      }
+    } label: {
+      actionIcon(item: item, iconSize: NSSize(width: 24, height: 24))
+    }
+    .buttonStyle(PlainButtonStyle())
+    .sheet(isPresented: $iconPickerPresented) {
+      switch item {
+      case .action(var action):
+        SymbolPicker(
+          symbol: Binding(
+            get: { action.iconPath },
+            set: { newPath in
+              action.iconPath = newPath
+              item = .action(action)
+            }
+          ))
+      case .group(var group):
+        SymbolPicker(
+          symbol: Binding(
+            get: { group.iconPath },
+            set: { newPath in
+              group.iconPath = newPath
+              item = .group(group)
+            }
+          ))
+      }
+    }
+  }
+}
+
 struct ActionRow: View {
   @Binding var action: Action
   var path: [Int]
@@ -157,6 +226,16 @@ struct ActionRow: View {
       }
       .frame(width: 110)
       .labelsHidden()
+
+      IconPickerMenu(
+        item: Binding(
+          get: { .action(action) },
+          set: { newItem in
+            if case .action(let newAction) = newItem {
+              action = newAction
+            }
+          }
+        ))
 
       switch action.type {
       case .application:
@@ -260,6 +339,16 @@ struct GroupRow: View {
           onKeyChanged: { userConfig.finishEditingKey() }
         )
 
+        IconPickerMenu(
+          item: Binding(
+            get: { .group(group) },
+            set: { newItem in
+              if case .group(let newGroup) = newItem {
+                group = newGroup
+              }
+            }
+          ))
+
         Button(
           role: .none,
           action: {
@@ -333,6 +422,9 @@ struct GroupRow: View {
       ),
       .action(
         Action(key: "f", type: .application, value: "/Applications/Firefox.app")
+      ),
+      .action(
+        Action(key: "a", type: .command, value: "ls")
       ),
 
       // Level 1 group with actions
