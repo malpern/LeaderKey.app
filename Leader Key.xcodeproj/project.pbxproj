@@ -41,6 +41,7 @@
 		427C18542BD6E59300955B98 /* NSWindow+Animations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 427C18532BD6E59300955B98 /* NSWindow+Animations.swift */; };
 		42A0CE822D2D226800879029 /* ConfigEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A0CE812D2D226800879029 /* ConfigEditorView.swift */; };
 		42B21FBC2D67566100F4A2C7 /* Alerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42B21FBB2D67566100F4A2C7 /* Alerts.swift */; };
+		42CCB5A32DAD257700356FC0 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = FBCA04D82D9F02F700271163 /* Kingfisher */; };
 		42DFCD722D5B7D48002EA111 /* Events.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42DFCD712D5B7D46002EA111 /* Events.swift */; };
 		42E70A572C823FF200FCF902 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 42E70A562C823FF200FCF902 /* Sparkle */; };
 		42F4CDC92D458FF700D0DD76 /* MainMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F4CDC82D458FF700D0DD76 /* MainMenu.swift */; };
@@ -112,7 +113,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FBCA04D92D9F02F700271163 /* Kingfisher in Frameworks */,
+				42CCB5A32DAD257700356FC0 /* Kingfisher in Frameworks */,
 				42E70A572C823FF200FCF902 /* Sparkle in Frameworks */,
 				427C18232BD31DF100955B98 /* Settings in Frameworks */,
 				115AA5C22DA546D500C17E18 /* SymbolPicker in Frameworks */,
@@ -587,7 +588,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 118;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Leader Key/Support/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -605,7 +606,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.13.0;
+				MARKETING_VERSION = 1.14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brnbw.Leader-Key";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -623,7 +624,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 118;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Leader Key/Support/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -641,7 +642,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.13.0;
+				MARKETING_VERSION = 1.14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brnbw.Leader-Key";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -654,7 +655,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 118;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
@@ -672,7 +673,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 118;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
