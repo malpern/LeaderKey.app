@@ -108,6 +108,16 @@ struct KeyListenerView: NSViewRepresentable {
         }
       case 51, 117:  // Backspace or Delete
         text.wrappedValue = ""
+      case 36:  // Return/Enter key
+        text.wrappedValue = "↵"
+      case 126:  // Up arrow
+        text.wrappedValue = "↑"
+      case 125:  // Down arrow
+        text.wrappedValue = "↓"
+      case 123:  // Left arrow
+        text.wrappedValue = "←"
+      case 124:  // Right arrow
+        text.wrappedValue = "→"
       default:
         if let characters = event.characters, !characters.isEmpty {
           text.wrappedValue = String(characters.first!)
