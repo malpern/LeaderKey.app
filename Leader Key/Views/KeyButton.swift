@@ -120,6 +120,10 @@ struct KeyListenerView: NSViewRepresentable {
         text.wrappedValue = "←"
       case 124:  // Right arrow
         text.wrappedValue = "→"
+      case 48:  // Tab key
+        text.wrappedValue = "⇥"
+      case 49:  // Space key
+        text.wrappedValue = "␣"
       default:
         if let characters = event.characters, !characters.isEmpty {
           text.wrappedValue = String(characters.first!)

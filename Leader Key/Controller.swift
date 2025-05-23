@@ -229,6 +229,10 @@ class Controller {
       return "←"
     case KeyHelpers.rightArrow.rawValue:
       return "→"
+    case KeyHelpers.tab.rawValue:
+      return "⇥"
+    case KeyHelpers.space.rawValue:
+      return "␣"
     default:
       return event.charactersIgnoringModifiers
     }
