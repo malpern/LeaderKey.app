@@ -188,7 +188,7 @@ class DragState: ObservableObject {
   @Published var draggedItemOffset: CGSize = .zero
   @Published var previewDropIndex: Int?
   @Published var originalArray: [ActionOrGroup] = []
-  @Published var originalPosition: CGPoint = .zero
+  @Published var dragLocation: CGPoint = .zero
 }
 
 struct GroupContentView: View {
@@ -317,6 +317,7 @@ struct GroupContentView: View {
     
     // Update the visual offset for the dragged item
     dragState.draggedItemOffset = value.translation
+    dragState.dragLocation = value.location
     
     // Calculate drop position based on global drag position
     let rowHeight: CGFloat = 60
@@ -495,18 +496,6 @@ struct ConfigRowContainer: View {
         )
         .opacity(isDragged ? 0.5 : 1.0)
         .scaleEffect(isDragged ? 0.97 : 1.0)
-        .background(
-          GeometryReader { geometry in
-            Color.clear
-              .preference(key: ItemPositionKey.self, value: geometry.frame(in: .global).origin)
-          }
-        )
-        .onPreferenceChange(ItemPositionKey.self) { position in
-          if !isDragged && !dragState.isDragging {
-            // Store position when not dragging
-            dragState.originalPosition = position
-          }
-        }
       } else {
         // Invisible placeholder to maintain spacing
         Rectangle()
@@ -680,12 +669,12 @@ struct ConfigEditorView: View {
           top: generalPadding, leading: generalPadding,
           bottom: generalPadding, trailing: 0))
     }
-    .coordinateSpace(name: "scrollView")
     .overlay(
       GeometryReader { geometry in
         // Floating dragged item - shown at root level so it's always visible
         if let draggedItem = dragState.draggedItem,
-           dragState.isDragging {
+           dragState.isDragging,
+           dragState.dragLocation != .zero {
           
           FloatingDraggedRow(
             item: draggedItem,
@@ -694,8 +683,8 @@ struct ConfigEditorView: View {
             expandedGroups: $expandedGroups
           )
           .position(
-            x: dragState.originalPosition.x - geometry.frame(in: .global).minX + dragState.draggedItemOffset.width,
-            y: dragState.originalPosition.y - geometry.frame(in: .global).minY + dragState.draggedItemOffset.height
+            x: dragState.dragLocation.x - geometry.frame(in: .global).minX,
+            y: dragState.dragLocation.y - geometry.frame(in: .global).minY
           )
           .zIndex(1000)
           .allowsHitTesting(false)
