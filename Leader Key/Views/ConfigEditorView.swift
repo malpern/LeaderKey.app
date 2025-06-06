@@ -5,6 +5,13 @@ import SymbolPicker
 
 let generalPadding: CGFloat = 8
 
+struct ItemPositionKey: PreferenceKey {
+  static var defaultValue: CGPoint = .zero
+  static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
+    value = nextValue()
+  }
+}
+
 protocol DragValueProtocol {
   var translation: CGSize { get }
   var location: CGPoint { get }
@@ -181,6 +188,7 @@ class DragState: ObservableObject {
   @Published var draggedItemOffset: CGSize = .zero
   @Published var previewDropIndex: Int?
   @Published var originalArray: [ActionOrGroup] = []
+  @Published var originalPosition: CGPoint = .zero
 }
 
 struct GroupContentView: View {
@@ -320,27 +328,28 @@ struct GroupContentView: View {
        currentIndex < group.actions.count {
       let targetIndex: Int
       
-      if relativeY > rowHeight * 1.2 {
-        // Mouse moved DOWN very far - move item to very end of list
-        targetIndex = group.actions.count
-      } else if relativeY > rowHeight * 0.8 {
-        // Mouse moved DOWN far - move item DOWN in list (higher index)
-        targetIndex = min(currentIndex + 2, group.actions.count)
-      } else if relativeY > rowHeight * 0.3 {
-        // Mouse moved DOWN slightly - show drop zone below
-        targetIndex = min(currentIndex + 1, group.actions.count)
-      } else if relativeY < -rowHeight * 0.8 {
-        // Mouse moved UP far - move item UP in list (lower index)
-        targetIndex = max(currentIndex - 1, 0)
-      } else if relativeY < -rowHeight * 0.3 {
-        // Mouse moved UP slightly - show drop zone above
-        targetIndex = max(currentIndex, 0)
+      // Calculate how many rows we've moved
+      let rowsMoved = Int(relativeY / rowHeight)
+      
+      if rowsMoved > 0 {
+        // Moving DOWN - increase index
+        targetIndex = min(currentIndex + rowsMoved + 1, group.actions.count)
+      } else if rowsMoved < 0 {
+        // Moving UP - decrease index
+        targetIndex = max(currentIndex + rowsMoved, 0)
       } else {
-        // Not dragged far enough - no drop zone
-        dragState.currentDropIndex = nil
-        dragState.currentDropPath = nil
-        dragState.previewDropIndex = nil
-        return
+        // Small movement - check if we should show adjacent drop zone
+        if relativeY > rowHeight * 0.3 {
+          targetIndex = min(currentIndex + 1, group.actions.count)
+        } else if relativeY < -rowHeight * 0.3 {
+          targetIndex = currentIndex
+        } else {
+          // Not dragged far enough - no drop zone
+          dragState.currentDropIndex = nil
+          dragState.currentDropPath = nil
+          dragState.previewDropIndex = nil
+          return
+        }
       }
       
       dragState.currentDropIndex = targetIndex
@@ -486,6 +495,18 @@ struct ConfigRowContainer: View {
         )
         .opacity(isDragged ? 0.5 : 1.0)
         .scaleEffect(isDragged ? 0.97 : 1.0)
+        .background(
+          GeometryReader { geometry in
+            Color.clear
+              .preference(key: ItemPositionKey.self, value: geometry.frame(in: .global).origin)
+          }
+        )
+        .onPreferenceChange(ItemPositionKey.self) { position in
+          if !isDragged && !dragState.isDragging {
+            // Store position when not dragging
+            dragState.originalPosition = position
+          }
+        }
       } else {
         // Invisible placeholder to maintain spacing
         Rectangle()
@@ -670,7 +691,10 @@ struct ConfigEditorView: View {
           userConfig: userConfig,
           expandedGroups: $expandedGroups
         )
-        .offset(dragState.draggedItemOffset)
+        .position(
+          x: dragState.originalPosition.x + dragState.draggedItemOffset.width + 360, // Half of typical row width
+          y: dragState.originalPosition.y + dragState.draggedItemOffset.height + 20  // Half of row height
+        )
         .zIndex(1000)
         .allowsHitTesting(false)
       }
