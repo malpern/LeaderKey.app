@@ -685,7 +685,7 @@ struct ConfigEditorView: View {
             expandedGroups: $expandedGroups
           )
           .position(
-            x: dragState.dragStartLocation.x - geometry.frame(in: .global).minX,
+            x: dragState.dragStartLocation.x - geometry.frame(in: .global).minX + 300, // Shift right so left edge is near cursor
             y: dragState.dragLocation.y - geometry.frame(in: .global).minY
           )
           .zIndex(1000)
