@@ -5,6 +5,153 @@ import SymbolPicker
 
 let generalPadding: CGFloat = 8
 
+protocol DragValueProtocol {
+  var translation: CGSize { get }
+  var location: CGPoint { get }
+}
+
+extension DragGesture.Value: DragValueProtocol {}
+extension MockDragGestureValue: DragValueProtocol {}
+
+struct DragHandle: View {
+  let onDragChanged: (any DragValueProtocol) -> Void
+  let onDragEnded: (any DragValueProtocol) -> Void
+  
+  var body: some View {
+    VStack(spacing: 2) {
+      Rectangle()
+        .fill(Color.secondary.opacity(0.6))
+        .frame(width: 3, height: 2)
+      Rectangle()
+        .fill(Color.secondary.opacity(0.6))
+        .frame(width: 3, height: 2)
+      Rectangle()
+        .fill(Color.secondary.opacity(0.6))
+        .frame(width: 3, height: 2)
+    }
+    .frame(width: 12, height: 12)
+    .background(
+      DragHandleNSView(
+        onDragChanged: onDragChanged,
+        onDragEnded: onDragEnded
+      )
+    )
+  }
+}
+
+struct DragHandleNSView: NSViewRepresentable {
+  let onDragChanged: (any DragValueProtocol) -> Void
+  let onDragEnded: (any DragValueProtocol) -> Void
+  
+  func makeNSView(context: Context) -> NSView {
+    let view = DragHandleView()
+    view.onDragChanged = onDragChanged
+    view.onDragEnded = onDragEnded
+    return view
+  }
+  
+  func updateNSView(_ nsView: NSView, context: Context) {
+    if let view = nsView as? DragHandleView {
+      view.onDragChanged = onDragChanged
+      view.onDragEnded = onDragEnded
+    }
+  }
+  
+  class DragHandleView: NSView {
+    var onDragChanged: ((any DragValueProtocol) -> Void)?
+    var onDragEnded: ((any DragValueProtocol) -> Void)?
+    private var isDragging = false
+    private var startPoint: CGPoint = .zero
+    
+    override func awakeFromNib() {
+      super.awakeFromNib()
+      setupTrackingArea()
+    }
+    
+    override func viewDidMoveToSuperview() {
+      super.viewDidMoveToSuperview()
+      setupTrackingArea()
+    }
+    
+    private func setupTrackingArea() {
+      let trackingArea = NSTrackingArea(
+        rect: bounds,
+        options: [.activeInActiveApp, .mouseEnteredAndExited, .inVisibleRect],
+        owner: self,
+        userInfo: nil
+      )
+      addTrackingArea(trackingArea)
+    }
+    
+    override func mouseEntered(with event: NSEvent) {
+      NSCursor.openHand.set()
+    }
+    
+    override func mouseExited(with event: NSEvent) {
+      if !isDragging {
+        NSCursor.arrow.set()
+      }
+    }
+    
+    override func mouseDown(with event: NSEvent) {
+      isDragging = true
+      startPoint = convert(event.locationInWindow, from: nil)
+      NSCursor.closedHand.set()
+      
+      // Trigger drag start immediately
+      let dragValue = MockDragGestureValue(
+        translation: .zero,
+        location: startPoint
+      )
+      onDragChanged?(dragValue)
+    }
+    
+    override func mouseDragged(with event: NSEvent) {
+      let currentPoint = convert(event.locationInWindow, from: nil)
+      let translation = CGPoint(
+        x: currentPoint.x - startPoint.x,
+        y: currentPoint.y - startPoint.y
+      )
+      
+      // Create a mock DragGesture.Value
+      let dragValue = MockDragGestureValue(
+        translation: CGSize(width: translation.x, height: translation.y),
+        location: currentPoint
+      )
+      
+      onDragChanged?(dragValue)
+    }
+    
+    override func mouseUp(with event: NSEvent) {
+      isDragging = false
+      let currentPoint = convert(event.locationInWindow, from: nil)
+      let translation = CGPoint(
+        x: currentPoint.x - startPoint.x,
+        y: currentPoint.y - startPoint.y
+      )
+      
+      // Create a mock DragGesture.Value
+      let dragValue = MockDragGestureValue(
+        translation: CGSize(width: translation.x, height: translation.y),
+        location: currentPoint
+      )
+      
+      onDragEnded?(dragValue)
+      NSCursor.arrow.set()
+    }
+  }
+}
+
+struct MockDragGestureValue {
+  let translation: CGSize
+  let location: CGPoint
+  let startLocation: CGPoint = .zero
+  let time: Date = Date()
+  let velocity: CGSize = .zero
+  let predictedEndLocation: CGPoint = .zero
+  let predictedEndTranslation: CGSize = .zero
+}
+
 struct AddButtons: View {
   let onAddAction: () -> Void
   let onAddGroup: () -> Void
@@ -24,9 +171,22 @@ struct AddButtons: View {
   }
 }
 
+class DragState: ObservableObject {
+  @Published var draggedItem: ActionOrGroup?
+  @Published var draggedFromPath: [Int]?
+  @Published var currentDropIndex: Int?
+  @Published var currentDropPath: [Int]?
+  @Published var dragOffset: CGSize = .zero
+  @Published var isDragging: Bool = false
+  @Published var draggedItemOffset: CGSize = .zero
+  @Published var previewDropIndex: Int?
+  @Published var originalArray: [ActionOrGroup] = []
+}
+
 struct GroupContentView: View {
   @Binding var group: Group
   @EnvironmentObject var userConfig: UserConfig
+  @EnvironmentObject var dragState: DragState
   var isRoot: Bool = false
   var parentPath: [Int] = []
   @Binding var expandedGroups: Set<[Int]>
@@ -35,14 +195,32 @@ struct GroupContentView: View {
     LazyVStack(spacing: generalPadding) {
       ForEach(group.actions.indices, id: \.self) { index in
         let currentPath = parentPath + [index]
-        ActionOrGroupRow(
-          item: binding(for: index),
-          path: currentPath,
-          onDelete: { group.actions.remove(at: index) },
-          onDuplicate: { group.actions.insert(group.actions[index], at: index) },
-          expandedGroups: $expandedGroups
+        let isDragged = dragState.draggedFromPath == currentPath
+        let shouldShowDropZone = shouldShowDropZoneAbove(index: index)
+        
+        ConfigRowContainer(
+          item: group.actions[index],
+          index: index,
+          currentPath: currentPath,
+          isDragged: isDragged,
+          shouldShowDropZone: shouldShowDropZone,
+          group: $group,
+          dragState: dragState,
+          expandedGroups: $expandedGroups,
+          parentPath: parentPath,
+          performDrop: performDrop,
+          startDrag: startDrag,
+          handleGlobalDragMove: handleGlobalDragMove,
+          endDrag: endDrag
         )
-        .id(index)
+      }
+      
+      // Drop zone at the end
+      if dragState.draggedItem != nil {
+        DropZoneView(isActive: dragState.currentDropIndex == group.actions.count && dragState.currentDropPath == parentPath)
+          .onTapGesture {
+            performDrop(at: group.actions.count)
+          }
       }
 
       AddButtons(
@@ -68,6 +246,399 @@ struct GroupContentView: View {
       set: { group.actions[index] = $0 }
     )
   }
+  
+  private func shouldShowDropZoneAbove(index: Int) -> Bool {
+    guard let dropIndex = dragState.currentDropIndex,
+          let dropPath = dragState.currentDropPath,
+          dragState.draggedItem != nil else { return false }
+    return dropIndex == index && dropPath == parentPath
+  }
+  
+  
+  private func startDrag(item: ActionOrGroup, fromPath: [Int]) {
+    dragState.draggedItem = item
+    dragState.draggedFromPath = fromPath
+    dragState.isDragging = true
+    dragState.draggedItemOffset = .zero
+    
+    // Apple guideline: Provide haptic feedback for drag start
+    NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
+  }
+  
+  private func handleDragMove(_ offset: CGSize, over path: [Int]) {
+    // Update the visual offset for the dragged item
+    dragState.draggedItemOffset = offset
+    
+    // Calculate drop position based on drag offset from NSView
+    let rowHeight: CGFloat = 60
+    let relativeY = offset.height
+    
+    if let currentIndex = path.last {
+      let targetIndex: Int
+      
+      if relativeY > rowHeight * 0.8 {
+        // Mouse moved DOWN - move item UP in list (lower index)
+        targetIndex = max(currentIndex - 1, 0)
+      } else if relativeY > rowHeight * 0.3 {
+        // Mouse moved DOWN slightly - show drop zone above
+        targetIndex = max(currentIndex, 0)
+      } else if relativeY < -rowHeight * 1.2 {
+        // Mouse moved UP very far - move item to very end of list
+        targetIndex = group.actions.count
+      } else if relativeY < -rowHeight * 0.8 {
+        // Mouse moved UP far - move item DOWN in list (higher index)
+        targetIndex = min(currentIndex + 2, group.actions.count)
+      } else if relativeY < -rowHeight * 0.3 {
+        // Mouse moved UP slightly - show drop zone below
+        targetIndex = min(currentIndex + 1, group.actions.count)
+      } else {
+        dragState.currentDropIndex = nil
+        dragState.currentDropPath = nil
+        return
+      }
+      
+      dragState.currentDropIndex = targetIndex
+      dragState.currentDropPath = parentPath
+    }
+  }
+  
+  private func handleGlobalDragMove(_ value: DragGesture.Value, startingFrom path: [Int]) {
+    // Safety check: ensure we have valid drag state
+    guard dragState.draggedItem != nil,
+          !group.actions.isEmpty else { return }
+    
+    // Update the visual offset for the dragged item
+    dragState.draggedItemOffset = value.translation
+    
+    // Calculate drop position based on global drag position
+    let rowHeight: CGFloat = 60
+    let translation = value.translation
+    let relativeY = translation.height
+    
+    if let currentIndex = path.last,
+       currentIndex >= 0,
+       currentIndex < group.actions.count {
+      let targetIndex: Int
+      
+      if relativeY > rowHeight * 1.2 {
+        // Mouse moved DOWN very far - move item to very end of list
+        targetIndex = group.actions.count
+      } else if relativeY > rowHeight * 0.8 {
+        // Mouse moved DOWN far - move item DOWN in list (higher index)
+        targetIndex = min(currentIndex + 2, group.actions.count)
+      } else if relativeY > rowHeight * 0.3 {
+        // Mouse moved DOWN slightly - show drop zone below
+        targetIndex = min(currentIndex + 1, group.actions.count)
+      } else if relativeY < -rowHeight * 0.8 {
+        // Mouse moved UP far - move item UP in list (lower index)
+        targetIndex = max(currentIndex - 1, 0)
+      } else if relativeY < -rowHeight * 0.3 {
+        // Mouse moved UP slightly - show drop zone above
+        targetIndex = max(currentIndex, 0)
+      } else {
+        // Not dragged far enough - no drop zone
+        dragState.currentDropIndex = nil
+        dragState.currentDropPath = nil
+        dragState.previewDropIndex = nil
+        return
+      }
+      
+      dragState.currentDropIndex = targetIndex
+      dragState.currentDropPath = parentPath
+      
+      // Store the preview drop index for visual feedback only
+      // We'll perform the actual reorder on drag end to avoid crashes
+      dragState.previewDropIndex = targetIndex
+    }
+  }
+  
+  private func performLiveReorder(to targetIndex: Int, from currentIndex: Int) {
+    guard targetIndex != currentIndex,
+          targetIndex >= 0,
+          targetIndex <= group.actions.count,
+          currentIndex >= 0,
+          currentIndex < group.actions.count,
+          !group.actions.isEmpty else { return }
+    
+    // Apple guideline: Provide subtle haptic feedback for reordering
+    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+    
+    // Apple guideline: Smooth, natural animation for reordering
+    withAnimation(Animation.spring(response: 0.35, dampingFraction: 0.8)) {
+      let item = group.actions.remove(at: currentIndex)
+      let insertIndex = targetIndex > currentIndex ? targetIndex - 1 : targetIndex
+      let safeInsertIndex = max(0, min(insertIndex, group.actions.count))
+      group.actions.insert(item, at: safeInsertIndex)
+      
+      // Update the dragged path to reflect the new position
+      if let draggedFromPath = dragState.draggedFromPath {
+        var newPath = draggedFromPath
+        if newPath.count > 0 {
+          newPath[newPath.count - 1] = safeInsertIndex
+          dragState.draggedFromPath = newPath
+        }
+      }
+    }
+  }
+  
+  private func endDrag() {
+    // Perform the final reorder if we have a valid drop target
+    if let dropIndex = dragState.currentDropIndex,
+       let fromPath = dragState.draggedFromPath,
+       let fromIndex = fromPath.last,
+       dropIndex != fromIndex,
+       fromIndex >= 0,
+       fromIndex < group.actions.count,
+       dropIndex >= 0,
+       dropIndex <= group.actions.count {
+      
+      // Perform the reorder safely
+      let item = group.actions.remove(at: fromIndex)
+      let insertIndex = dropIndex > fromIndex ? dropIndex - 1 : dropIndex
+      let safeInsertIndex = max(0, min(insertIndex, group.actions.count))
+      group.actions.insert(item, at: safeInsertIndex)
+      
+      // Provide haptic feedback for completion
+      NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
+    }
+    
+    // Reset drag state
+    dragState.draggedItem = nil
+    dragState.draggedFromPath = nil
+    dragState.currentDropIndex = nil
+    dragState.currentDropPath = nil
+    dragState.dragOffset = .zero
+    dragState.isDragging = false
+    dragState.draggedItemOffset = .zero
+    dragState.previewDropIndex = nil
+    dragState.originalArray = []
+  }
+  
+  private func performDrop(at index: Int) {
+    guard let draggedItem = dragState.draggedItem,
+          let fromPath = dragState.draggedFromPath else { return }
+    
+    withAnimation(.easeInOut(duration: 0.3)) {
+      // Remove from original position
+      if let fromIndex = fromPath.last, fromPath.dropLast() == parentPath {
+        group.actions.remove(at: fromIndex)
+        let adjustedIndex = fromIndex < index ? index - 1 : index
+        group.actions.insert(draggedItem, at: adjustedIndex)
+      } else {
+        // Cross-hierarchy move - just insert at target position
+        group.actions.insert(draggedItem, at: index)
+      }
+    }
+  }
+}
+
+struct ConfigRowContainer: View {
+  let item: ActionOrGroup
+  let index: Int
+  let currentPath: [Int]
+  let isDragged: Bool
+  let shouldShowDropZone: Bool
+  @Binding var group: Group
+  @ObservedObject var dragState: DragState
+  @Binding var expandedGroups: Set<[Int]>
+  let parentPath: [Int]
+  let performDrop: (Int) -> Void
+  let startDrag: (ActionOrGroup, [Int]) -> Void
+  let handleGlobalDragMove: (DragGesture.Value, [Int]) -> Void
+  let endDrag: () -> Void
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Drop zone above this item
+      if shouldShowDropZone {
+        DropZoneView(isActive: dragState.currentDropIndex == index && dragState.currentDropPath == parentPath)
+          .onTapGesture {
+            if let draggedItem = dragState.draggedItem {
+              performDrop(index)
+            }
+          }
+      }
+      
+      // The actual row - dim when being dragged
+      if index < group.actions.count {
+        ActionOrGroupRow(
+          item: Binding(
+            get: { 
+              guard index < group.actions.count else { return item }
+              return group.actions[index] 
+            },
+            set: { newValue in
+              guard index < group.actions.count else { return }
+              group.actions[index] = newValue 
+            }
+          ),
+          path: currentPath,
+          onDelete: { 
+            guard index < group.actions.count else { return }
+            group.actions.remove(at: index) 
+          },
+          onDuplicate: { 
+            guard index < group.actions.count else { return }
+            group.actions.insert(group.actions[index], at: index) 
+          },
+          expandedGroups: $expandedGroups,
+          dragState: dragState
+        )
+        .opacity(isDragged ? 0.5 : 1.0)
+        .scaleEffect(isDragged ? 0.97 : 1.0)
+      } else {
+        // Invisible placeholder to maintain spacing
+        Rectangle()
+          .fill(Color.clear)
+          .frame(height: 0)
+      }
+    }
+    .gesture(
+      DragGesture(minimumDistance: 10, coordinateSpace: .global)
+        .onChanged { value in
+          // Safety check: ensure we have a valid item and index
+          guard index < group.actions.count else { return }
+          
+          if dragState.draggedFromPath == nil {
+            // Apple guideline: Immediate visual feedback
+            withAnimation(Animation.easeOut(duration: 0.15)) {
+              startDrag(item, currentPath)
+            }
+            NSCursor.closedHand.set()
+          }
+          if dragState.draggedFromPath == currentPath {
+            handleGlobalDragMove(value, currentPath)
+          }
+        }
+        .onEnded { value in
+          if dragState.draggedFromPath == currentPath {
+            // Apple guideline: Smooth completion animation
+            withAnimation(Animation.spring(response: 0.4, dampingFraction: 0.8)) {
+              endDrag()
+            }
+          }
+          NSCursor.arrow.set()
+        }
+    )
+  }
+}
+
+struct DropZoneView: View {
+  let isActive: Bool
+  
+  var body: some View {
+    HStack {
+      if isActive {
+        // Apple guideline: Clear, prominent drop indicator
+        HStack(spacing: 4) {
+          Rectangle()
+            .fill(Color.accentColor)
+            .frame(height: 3)
+            .cornerRadius(1.5)
+          
+          Circle()
+            .fill(Color.accentColor)
+            .frame(width: 6, height: 6)
+          
+          Rectangle()
+            .fill(Color.accentColor)
+            .frame(height: 3)
+            .cornerRadius(1.5)
+        }
+        .scaleEffect(isActive ? 1.0 : 0.8)
+        .opacity(isActive ? 1.0 : 0.0)
+        .animation(Animation.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
+      } else {
+        Rectangle()
+          .fill(Color.clear)
+          .frame(height: 2)
+      }
+    }
+  }
+}
+
+struct FloatingDraggedRow: View {
+  let item: ActionOrGroup
+  @ObservedObject var dragState: DragState
+  let userConfig: UserConfig
+  @Binding var expandedGroups: Set<[Int]>
+  
+  var body: some View {
+    // Create a simplified preview that doesn't have interactive elements
+    HStack(spacing: 8) {
+      Image(systemName: "line.3.horizontal")
+        .foregroundColor(.secondary)
+        .font(.caption)
+      
+      switch item {
+      case .action(let action):
+        Text(action.key ?? "")
+          .font(.system(.body, design: .monospaced))
+          .foregroundColor(.primary)
+          .frame(width: 32, height: 24)
+          .background(Color(.controlBackgroundColor))
+          .cornerRadius(5)
+        
+        Text(action.type.rawValue)
+          .foregroundColor(.secondary)
+        
+        if let iconPath = action.iconPath {
+          Image(systemName: iconPath.hasPrefix("SF:") ? String(iconPath.dropFirst(3)) : "app.fill")
+            .frame(width: 24, height: 24)
+        }
+        
+        Text(action.value)
+          .truncationMode(.middle)
+          .lineLimit(1)
+          .foregroundColor(.primary)
+        
+        Spacer()
+        
+        Text(action.label ?? action.bestGuessDisplayName)
+          .frame(width: 120)
+          .foregroundColor(.secondary)
+          
+      case .group(let group):
+        Text(group.key ?? "")
+          .font(.system(.body, design: .monospaced))
+          .foregroundColor(.primary)
+          .frame(width: 32, height: 24)
+          .background(Color(.controlBackgroundColor))
+          .cornerRadius(5)
+        
+        if let iconPath = group.iconPath {
+          Image(systemName: iconPath.hasPrefix("SF:") ? String(iconPath.dropFirst(3)) : "folder.fill")
+            .frame(width: 24, height: 24)
+        }
+        
+        Image(systemName: "chevron.right")
+          .foregroundColor(.secondary)
+        
+        Spacer()
+        
+        Text(group.label ?? "Group")
+          .frame(width: 120)
+          .foregroundColor(.secondary)
+      }
+    }
+    .padding(.horizontal, 8)
+    .frame(height: 40)
+    // Apple guideline: Drag preview should be slightly transparent and elevated
+    .scaleEffect(0.98)
+    .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+    .background(
+      RoundedRectangle(cornerRadius: 8)
+        .fill(Color(NSColor.controlBackgroundColor))
+        .opacity(0.95)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 8)
+        .stroke(Color.accentColor, lineWidth: 2)
+    )
+    // Apple guideline: Smooth entrance animation
+    .scaleEffect(dragState.isDragging ? 0.98 : 1.0)
+    .animation(Animation.spring(response: 0.3, dampingFraction: 0.7), value: dragState.isDragging)
+  }
 }
 
 struct ConfigEditorView: View {
@@ -75,16 +646,34 @@ struct ConfigEditorView: View {
   @EnvironmentObject var userConfig: UserConfig
   var isRoot: Bool = true
   @Binding var expandedGroups: Set<[Int]>
+  @StateObject private var dragState = DragState()
 
   var body: some View {
     ScrollView {
       GroupContentView(
         group: $group, isRoot: isRoot, parentPath: [], expandedGroups: $expandedGroups
       )
+      .environmentObject(dragState)
       .padding(
         EdgeInsets(
           top: generalPadding, leading: generalPadding,
           bottom: generalPadding, trailing: 0))
+    }
+    .overlay(alignment: .topLeading) {
+      // Floating dragged item - shown at root level so it's always visible
+      if let draggedItem = dragState.draggedItem,
+         dragState.isDragging {
+        
+        FloatingDraggedRow(
+          item: draggedItem,
+          dragState: dragState,
+          userConfig: userConfig,
+          expandedGroups: $expandedGroups
+        )
+        .offset(dragState.draggedItemOffset)
+        .zIndex(1000)
+        .allowsHitTesting(false)
+      }
     }
   }
 }
@@ -96,6 +685,7 @@ struct ActionOrGroupRow: View {
   let onDuplicate: () -> Void
   @EnvironmentObject var userConfig: UserConfig
   @Binding var expandedGroups: Set<[Int]>
+  @ObservedObject var dragState: DragState
 
   var body: some View {
     switch item {
@@ -112,7 +702,8 @@ struct ActionOrGroupRow: View {
         ),
         path: path,
         onDelete: onDelete,
-        onDuplicate: onDuplicate
+        onDuplicate: onDuplicate,
+        dragState: dragState
       )
     case .group:
       GroupRow(
@@ -128,7 +719,8 @@ struct ActionOrGroupRow: View {
         path: path,
         expandedGroups: $expandedGroups,
         onDelete: onDelete,
-        onDuplicate: onDuplicate
+        onDuplicate: onDuplicate,
+        dragState: dragState
       )
     }
   }
@@ -206,11 +798,24 @@ struct ActionRow: View {
   var path: [Int]
   let onDelete: () -> Void
   let onDuplicate: () -> Void
+  @ObservedObject var dragState: DragState
   @FocusState private var isKeyFocused: Bool
   @EnvironmentObject var userConfig: UserConfig
 
   var body: some View {
     HStack(spacing: generalPadding) {
+      Image(systemName: "line.3.horizontal")
+        .foregroundColor(.secondary)
+        .font(.caption)
+        .padding(.trailing, generalPadding / 2)
+        .onHover { hovering in
+          if hovering {
+            NSCursor.openHand.set()
+          } else {
+            NSCursor.arrow.set()
+          }
+        }
+      
       KeyButton(
         text: Binding(
           get: { action.key ?? "" },
@@ -225,7 +830,7 @@ struct ActionRow: View {
         Text("Command").tag(Type.command)
         Text("Folder").tag(Type.folder)
       }
-      .frame(width: 110)
+      .frame(minWidth: 100, maxWidth: 120)
       .labelsHidden()
 
       IconPickerMenu(
@@ -313,6 +918,7 @@ struct GroupRow: View {
   @FocusState private var isKeyFocused: Bool
   let onDelete: () -> Void
   let onDuplicate: () -> Void
+  @ObservedObject var dragState: DragState
   @EnvironmentObject var userConfig: UserConfig
 
   private var isExpanded: Bool {
@@ -330,6 +936,18 @@ struct GroupRow: View {
   var body: some View {
     LazyVStack(spacing: generalPadding) {
       HStack(spacing: generalPadding) {
+        Image(systemName: "line.3.horizontal")
+          .foregroundColor(.secondary)
+          .font(.caption)
+          .padding(.trailing, generalPadding / 2)
+          .onHover { hovering in
+            if hovering {
+              NSCursor.openHand.set()
+            } else {
+              NSCursor.arrow.set()
+            }
+          }
+        
         KeyButton(
           text: Binding(
             get: { group.key ?? "" },
