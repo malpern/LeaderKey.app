@@ -189,6 +189,7 @@ class DragState: ObservableObject {
   @Published var previewDropIndex: Int?
   @Published var originalArray: [ActionOrGroup] = []
   @Published var dragLocation: CGPoint = .zero
+  @Published var dragStartLocation: CGPoint = .zero
 }
 
 struct GroupContentView: View {
@@ -512,6 +513,7 @@ struct ConfigRowContainer: View {
           if dragState.draggedFromPath == nil {
             // Apple guideline: Immediate visual feedback
             withAnimation(Animation.easeOut(duration: 0.15)) {
+              dragState.dragStartLocation = value.location
               startDrag(item, currentPath)
             }
             NSCursor.closedHand.set()
@@ -683,7 +685,7 @@ struct ConfigEditorView: View {
             expandedGroups: $expandedGroups
           )
           .position(
-            x: dragState.dragLocation.x - geometry.frame(in: .global).minX,
+            x: dragState.dragStartLocation.x - geometry.frame(in: .global).minX,
             y: dragState.dragLocation.y - geometry.frame(in: .global).minY
           )
           .zIndex(1000)
