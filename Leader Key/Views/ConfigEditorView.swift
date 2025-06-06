@@ -680,25 +680,28 @@ struct ConfigEditorView: View {
           top: generalPadding, leading: generalPadding,
           bottom: generalPadding, trailing: 0))
     }
-    .overlay(alignment: .topLeading) {
-      // Floating dragged item - shown at root level so it's always visible
-      if let draggedItem = dragState.draggedItem,
-         dragState.isDragging {
-        
-        FloatingDraggedRow(
-          item: draggedItem,
-          dragState: dragState,
-          userConfig: userConfig,
-          expandedGroups: $expandedGroups
-        )
-        .position(
-          x: dragState.originalPosition.x + dragState.draggedItemOffset.width + 360, // Half of typical row width
-          y: dragState.originalPosition.y + dragState.draggedItemOffset.height + 20  // Half of row height
-        )
-        .zIndex(1000)
-        .allowsHitTesting(false)
+    .coordinateSpace(name: "scrollView")
+    .overlay(
+      GeometryReader { geometry in
+        // Floating dragged item - shown at root level so it's always visible
+        if let draggedItem = dragState.draggedItem,
+           dragState.isDragging {
+          
+          FloatingDraggedRow(
+            item: draggedItem,
+            dragState: dragState,
+            userConfig: userConfig,
+            expandedGroups: $expandedGroups
+          )
+          .position(
+            x: dragState.originalPosition.x - geometry.frame(in: .global).minX + dragState.draggedItemOffset.width,
+            y: dragState.originalPosition.y - geometry.frame(in: .global).minY + dragState.draggedItemOffset.height
+          )
+          .zIndex(1000)
+          .allowsHitTesting(false)
+        }
       }
-    }
+    )
   }
 }
 
