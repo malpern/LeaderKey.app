@@ -920,18 +920,28 @@ struct ConfigEditorView: View {
 
   private func updateDropTarget(at location: CGPoint) {
     var newTarget: DropTarget?
+    var potentialAutoExpandPath: [Int]?  // The path to the group we might expand
 
+    // Find the row being hovered over
     for (path, frame) in rowFrames.sorted(by: { $0.value.minY < $1.value.minY }) {
       if frame.contains(location) {
         let item = getItemAtPath(path, in: group)
         let isGroup = item?.isGroup ?? false
+        let isExpanded = expandedGroups.contains(path)
+
+        // Check if this is a candidate for auto-expansion
+        if isGroup && !isExpanded {
+          potentialAutoExpandPath = path
+        }
+
+        // --- Existing logic to determine drop target ---
         let targetMidY = frame.minY + (frame.height / 2)
 
         if location.y < targetMidY {
           // Drop ABOVE the item
           newTarget = DropTarget(path: Array(path.dropLast()), index: path.last!)
         } else {
-          if isGroup && expandedGroups.contains(path) {
+          if isGroup && isExpanded {
             // Drop INTO the expanded group
             newTarget = DropTarget(path: path, index: 0)
           } else {
@@ -939,18 +949,34 @@ struct ConfigEditorView: View {
             newTarget = DropTarget(path: Array(path.dropLast()), index: path.last! + 1)
           }
         }
-        break // Found the target row
+        break  // Found the target row
       }
     }
 
+    // --- Update drop target state ---
     if newTarget != dragState.currentDropTarget {
       DispatchQueue.main.async {
         dragState.currentDropTarget = newTarget
+      }
+    }
 
-        // Handle auto-expansion if hovering over a group
-        if let target = newTarget, let item = getItemAtPath(target.path, in: group), item.isGroup {
-          // Simplified auto-expand logic here
+    // --- Handle auto-expansion logic ---
+    // If we're not hovering over the same group as before, cancel the old timer.
+    if dragState.hoveredGroupPath != potentialAutoExpandPath {
+      dragState.autoExpandTimer?.invalidate()
+      dragState.autoExpandTimer = nil
+      dragState.hoveredGroupPath = potentialAutoExpandPath
+    }
+
+    // If we are hovering over a new group and the timer isn't running yet, start it.
+    if let pathToExpand = potentialAutoExpandPath, dragState.autoExpandTimer == nil {
+      dragState.autoExpandTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: false) { _ in
+        // Use withAnimation for a smooth expansion
+        withAnimation(.easeOut(duration: 0.2)) {
+          self.expandedGroups.insert(pathToExpand)
         }
+        // Give haptic feedback
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
       }
     }
   }
