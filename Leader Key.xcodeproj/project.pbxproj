@@ -51,6 +51,7 @@
 		42FDC31A2D51687B004F5C5C /* AdvancedPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42FDC3192D51687B004F5C5C /* AdvancedPane.swift */; };
 		605385A32D523CAD00BEDB4B /* Pulsate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 605385A22D523CAD00BEDB4B /* Pulsate.swift */; };
 		606C56EF2DAB875A00198B9F /* Cheater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606C56EE2DAB875A00198B9F /* Cheater.swift */; };
+		86F699362DF3F3600064821F /* PopoverPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F699352DF3F3600064821F /* PopoverPresenter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -106,6 +107,7 @@
 		42FDC3192D51687B004F5C5C /* AdvancedPane.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AdvancedPane.swift; sourceTree = "<group>"; };
 		605385A22D523CAD00BEDB4B /* Pulsate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pulsate.swift; sourceTree = "<group>"; };
 		606C56EE2DAB875A00198B9F /* Cheater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cheater.swift; sourceTree = "<group>"; };
+		86F699352DF3F3600064821F /* PopoverPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPresenter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -242,6 +244,7 @@
 				427C18372BD3262100955B98 /* VisualEffectBackground.swift */,
 				42F4CDCC2D45B13600D0DD76 /* KeyButton.swift */,
 				115AA5BE2DA521C200C17E18 /* ActionIcon.swift */,
+				86F699352DF3F3600064821F /* PopoverPresenter.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -409,6 +412,7 @@
 				425495402D75EFAD0020300E /* ForTheHorde.swift in Sources */,
 				42F4CDCF2D46E2B300D0DD76 /* Cheatsheet.swift in Sources */,
 				42DFCD722D5B7D48002EA111 /* Events.swift in Sources */,
+				86F699362DF3F3600064821F /* PopoverPresenter.swift in Sources */,
 				423632132D676F5200878D92 /* FileMonitor.swift in Sources */,
 				427C182D2BD31F9500955B98 /* Settings.swift in Sources */,
 				426E625B2D2E6A98009FD2F2 /* CommandRunner.swift in Sources */,
@@ -606,7 +610,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brnbw.Leader-Key";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -643,7 +647,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brnbw.Leader-Key";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -662,7 +666,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = X2RKZ5TG99;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.5;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brnbw.Leader-KeyTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -682,7 +686,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = X2RKZ5TG99;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.5;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brnbw.Leader-KeyTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";

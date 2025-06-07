@@ -13,11 +13,13 @@ struct GeneralPane: View {
   var body: some View {
     Settings.Container(contentWidth: contentWidth) {
       Settings.Section(title: "Shortcut") {
-        KeyboardShortcuts.Recorder(for: .activate)
-      }
-
-      Settings.Section(title: "App") {
-        LaunchAtLogin.Toggle()
+        HStack {
+          KeyboardShortcuts.Recorder(for: .activate)
+          Spacer()
+          LaunchAtLogin.Toggle {
+            Text("Launch at startup")
+          }
+        }
       }
 
       Settings.Section(title: "Config", bottomDivider: true, verticalAlignment: .top) {

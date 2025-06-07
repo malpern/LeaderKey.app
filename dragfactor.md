@@ -1,4 +1,4 @@
-# Drag-and-Drop Refactoring Plan
+=# Drag-and-Drop Refactoring Plan
 
 This document outlines the plan to improve the drag-and-drop functionality in the configuration list view, making it more intuitive and user-friendly while preserving existing interactions.
 

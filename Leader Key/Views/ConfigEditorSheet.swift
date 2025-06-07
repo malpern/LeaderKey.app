@@ -3,6 +3,7 @@ import Defaults
 import KeyboardShortcuts
 import SwiftUI
 import SymbolPicker
+import AppKit
 
 let generalPadding: CGFloat = 8
 
@@ -440,7 +441,7 @@ struct GroupContentView: View {
         }
       )
       .padding(.top, generalPadding * 0.5)
-      .padding(.leading, 32)
+      .padding(.leading, 72)
     }
   }
 
@@ -834,11 +835,6 @@ struct ConfigEditorSheetView: View {
             bottom: generalPadding, trailing: 0
           )
         )
-      }
-      .sheet(isPresented: $isSheetPresented, onDismiss: {
-        dragState.focusedItemPath = nil  // Deselect on dismiss
-      }) {
-        inspectorView()
       }
       .onChange(of: dragState.focusedItemPath) { path in
         isSheetPresented = path != nil
@@ -1443,6 +1439,9 @@ struct ActionOrGroupRow: View {
   @Binding var expandedGroups: Set<[Int]>
   @ObservedObject var dragState: DragState
   @FocusState private var isKeyFocused: Bool
+  @FocusState private var isLabelFocused: Bool
+  @State private var labelFieldAnchor: NSView? = nil
+  @State private var showInspectorPopover = false
 
   private var isFocused: Bool {
     dragState.focusedItemPath == path
@@ -1609,8 +1608,10 @@ struct ActionRow: View {
   @Binding var action: Action
   var path: [Int]
   @ObservedObject var dragState: DragState
-  @FocusState private var isKeyFocused: Bool
+  @FocusState private var isLabelFocused: Bool
   @EnvironmentObject var userConfig: UserConfig
+  @State private var labelFieldAnchor: NSView?
+  @State private var showInspectorPopover = false
 
   private var isFocused: Bool {
     dragState.focusedItemPath == path
@@ -1647,6 +1648,14 @@ struct ActionRow: View {
             .fill(Color(.controlBackgroundColor))
         )
         .clipShape(RoundedRectangle(cornerRadius: 5))
+        .focused($isLabelFocused)
+        .background(ViewExtractor(nsView: $labelFieldAnchor))
+        .onChange(of: isLabelFocused) { focused in
+          if focused {
+            showInspectorPopover = true
+            dragState.focusedItemPath = path
+          }
+        }
 
       Spacer()
 
@@ -1662,6 +1671,27 @@ struct ActionRow: View {
           }
         }
     }
+    .background(
+      PopoverPresenter(
+        isPresented: $showInspectorPopover,
+        content: {
+          PropertyInspectorView(
+            selectedItem: Binding<ActionOrGroup?>(
+              get: { .action(action) },
+              set: { newItem in
+                if case .action(let newAction) = newItem {
+                  action = newAction
+                }
+              }
+            ),
+            onDelete: {},
+            onDuplicate: {}
+          )
+        },
+        preferredEdge: .maxY,
+        anchorView: labelFieldAnchor
+      )
+    )
   }
 
   private var validationErrorForKey: ValidationErrorType? {
@@ -1684,9 +1714,11 @@ struct GroupRow: View {
   @Binding var group: Group
   var path: [Int]
   @Binding var expandedGroups: Set<[Int]>
-  @FocusState private var isKeyFocused: Bool
+  @FocusState private var isLabelFocused: Bool
   @ObservedObject var dragState: DragState
   @EnvironmentObject var userConfig: UserConfig
+  @State private var labelFieldAnchor: NSView?
+  @State private var showInspectorPopover = false
 
   private var isFocused: Bool {
     dragState.focusedItemPath == path
@@ -1749,6 +1781,14 @@ struct GroupRow: View {
               .fill(Color(.controlBackgroundColor))
           )
           .clipShape(RoundedRectangle(cornerRadius: 5))
+          .focused($isLabelFocused)
+          .background(ViewExtractor(nsView: $labelFieldAnchor))
+          .onChange(of: isLabelFocused) { focused in
+            if focused {
+              showInspectorPopover = true
+              dragState.focusedItemPath = path
+            }
+          }
 
         Spacer(minLength: 0)
 
@@ -1766,6 +1806,27 @@ struct GroupRow: View {
       }
     }
     .padding(.horizontal, 0)
+    .background(
+      PopoverPresenter(
+        isPresented: $showInspectorPopover,
+        content: {
+          PropertyInspectorView(
+            selectedItem: Binding<ActionOrGroup?>(
+              get: { .group(group) },
+              set: { newItem in
+                if case .group(let newGroup) = newItem {
+                  group = newGroup
+                }
+              }
+            ),
+            onDelete: {},
+            onDuplicate: {}
+          )
+        },
+        preferredEdge: .maxY,
+        anchorView: labelFieldAnchor
+      )
+    )
   }
 
   private var validationErrorForKey: ValidationErrorType? {
@@ -1782,6 +1843,22 @@ struct GroupRow: View {
 
     return nil
   }
+}
+
+struct ViewExtractor: NSViewRepresentable {
+    @Binding var nsView: NSView?
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            self.nsView = view.superview
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            self.nsView = nsView.superview
+        }
+    }
 }
 
 #Preview {
@@ -1919,17 +1996,13 @@ struct PropertyInspectorView: View {
 
 struct GroupDetailView: View {
   @Binding var group: Group
+  @FocusState private var isLabelFocused: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack(alignment: .top) {
-        actionIcon(item: .group(group), iconSize: NSSize(width: 32, height: 32))
-          .padding(.top, 4)
-
-        VStack(alignment: .leading) {
-          TextField("Label", text: $group.label._orEmpty())
-        }
-      }
+      SelectAllTextField(text: $group.label._orEmpty(), isFocused: $isLabelFocused)
+        .frame(height: 24)
+        .padding(.bottom, 5)
 
       Divider().padding(.vertical, 4)
 
@@ -1959,14 +2032,22 @@ struct GroupDetailView: View {
         }
       }
     }
+    .onAppear {
+      isLabelFocused = true
+    }
   }
 }
 
 struct ActionDetailView: View {
     @Binding var action: Action
+    @FocusState private var isLabelFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            SelectAllTextField(text: $action.label._orEmpty(), isFocused: $isLabelFocused)
+                .frame(height: 24)
+                .padding(.bottom, 5)
+
             Picker("Type", selection: $action.type) {
                 Text("Application").tag(Type.application)
                 Text("URL").tag(Type.url)
@@ -2011,12 +2092,75 @@ struct ActionDetailView: View {
                     case .url:
                         TextField("URL", text: $action.value, prompt: Text("https://apple.com"))
                     case .command:
-                        TextField("Shell Command", text: $action.value, prompt: Text("say 'hello'"))
+                        TextField("Shell Command", text: $action.value, prompt: Text("for i in {1..3}; do say \"hello $i\"; done"))
                     case .group:
                         EmptyView()
                     }
                 }
             }
+        }
+        .onAppear {
+          isLabelFocused = true
+        }
+    }
+}
+
+struct SelectAllTextField: NSViewRepresentable {
+    @Binding var text: String
+    var isFocused: FocusState<Bool>.Binding
+
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField(string: text)
+        textField.delegate = context.coordinator
+        textField.font = .preferredFont(forTextStyle: .headline)
+        textField.isBordered = true
+        textField.backgroundColor = .textBackgroundColor
+        textField.drawsBackground = true
+        textField.layer?.cornerRadius = 5.0
+        textField.layer?.borderWidth = 1.0
+        textField.layer?.borderColor = NSColor.separatorColor.cgColor
+        return textField
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        if isFocused.wrappedValue && !context.coordinator.isFirstResponder {
+             DispatchQueue.main.async {
+                nsView.window?.makeFirstResponder(nsView)
+             }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, isFocused: isFocused)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+        var isFocused: FocusState<Bool>.Binding
+        var isFirstResponder: Bool = false
+
+        init(text: Binding<String>, isFocused: FocusState<Bool>.Binding) {
+            _text = text
+            self.isFocused = isFocused
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let textField = obj.object as? NSTextField else { return }
+            self.text = textField.stringValue
+        }
+
+        func controlDidBeginEditing(_ obj: Notification) {
+            guard let textField = obj.object as? NSTextField else { return }
+            isFirstResponder = true
+            textField.selectAll(nil)
+        }
+
+        func controlDidEndEditing(_ obj: Notification) {
+            isFirstResponder = false
+            isFocused.wrappedValue = false
         }
     }
 }
