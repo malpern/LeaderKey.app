@@ -332,6 +332,7 @@ class DragState: ObservableObject {
   @Published var dragLocation: CGPoint = .zero
   @Published var autoExpandTimer: Timer?
   @Published var hoveredGroupPath: [Int]?
+  @Published var hoveredItemPath: [Int]?
 
   // Focus state for keyboard navigation
   @Published var focusedItemPath: [Int]?
@@ -413,7 +414,7 @@ struct GroupContentView: View {
             parentPath: currentPath,
             expandedGroups: $expandedGroups
           )
-          .padding(.leading, generalPadding)
+          .padding(.leading, 20)
         }
       }
 
@@ -431,18 +432,15 @@ struct GroupContentView: View {
 
       AddButtons(
         onAddAction: {
-          withAnimation {
-            group.actions.append(
-              .action(Action(key: "", type: .application, value: "")))
-          }
+          group.actions.append(
+            .action(Action(key: "", type: .application, value: "")))
         },
         onAddGroup: {
-          withAnimation {
-            group.actions.append(.group(Group(key: "", actions: [])))
-          }
+          group.actions.append(.group(Group(key: "", actions: [])))
         }
       )
       .padding(.top, generalPadding * 0.5)
+      .padding(.leading, 32)
     }
   }
 
@@ -532,26 +530,7 @@ struct GroupContentView: View {
     return (commonAncestor, fromBranch, toBranch)
   }
 
-  private func removeItemFromPath(_ path: [Int]) {
-    guard !path.isEmpty else { return }
-
-    if path.count == 1 && path.first! < group.actions.count {
-      // Remove from current group
-      group.actions.remove(at: path[0])
-    } else if path.count > 1 {
-      // Remove from nested group - need to find the right group
-      let firstIndex = path[0]
-      if firstIndex < group.actions.count,
-        case .group(var nestedGroup) = group.actions[firstIndex]
-      {
-        let remainingPath = Array(path.dropFirst())
-        removeFromNestedGroup(&nestedGroup, path: remainingPath)
-        group.actions[firstIndex] = .group(nestedGroup)
-      }
-    }
-  }
-
-  private func removeFromNestedGroup(_ group: inout Group, path: [Int]) {
+  private func removeItemFromGroup(_ group: inout Group, path: [Int]) {
     guard !path.isEmpty else { return }
 
     if path.count == 1 && path[0] < group.actions.count {
@@ -562,58 +541,21 @@ struct GroupContentView: View {
         case .group(var nestedGroup) = group.actions[firstIndex]
       {
         let remainingPath = Array(path.dropFirst())
-        removeFromNestedGroup(&nestedGroup, path: remainingPath)
+        removeItemFromGroup(&nestedGroup, path: remainingPath)
         group.actions[firstIndex] = .group(nestedGroup)
       }
     }
   }
 
-  private func insertItemAtPath(_ item: ActionOrGroup, path: [Int], index: Int) {
-    if path == parentPath {
-      // Insert into current group
+  private func insertItemIntoGroup(
+    _ group: inout Group, item: ActionOrGroup, path: [Int], index: Int
+  ) {
+    if path.isEmpty {
+      // Insert at root level
       let safeIndex = max(0, min(index, group.actions.count))
       group.actions.insert(item, at: safeIndex)
-    } else if path.count > parentPath.count && path.starts(with: parentPath) {
-      // Insert into nested group within this hierarchy
-      let relativePath = Array(path.dropFirst(parentPath.count))
-      if !relativePath.isEmpty {
-        insertIntoNestedGroup(item, relativePath: relativePath, index: index)
-      }
-    }
-  }
-
-  private func insertIntoNestedGroup(_ item: ActionOrGroup, relativePath: [Int], index: Int) {
-    guard !relativePath.isEmpty else { return }
-
-    if relativePath.count == 1 {
-      // Insert directly into the specified group
-      let groupIndex = relativePath[0]
-      if groupIndex < group.actions.count,
-        case .group(var targetGroup) = group.actions[groupIndex]
-      {
-        let safeIndex = max(0, min(index, targetGroup.actions.count))
-        targetGroup.actions.insert(item, at: safeIndex)
-        group.actions[groupIndex] = .group(targetGroup)
-      }
-    } else {
-      // Navigate deeper into nested groups
-      let firstIndex = relativePath[0]
-      if firstIndex < group.actions.count,
-        case .group(var nestedGroup) = group.actions[firstIndex]
-      {
-        let remainingPath = Array(relativePath.dropFirst())
-        insertIntoNestedGroupRecursive(&nestedGroup, path: remainingPath, item: item, index: index)
-        group.actions[firstIndex] = .group(nestedGroup)
-      }
-    }
-  }
-
-  private func insertIntoNestedGroupRecursive(
-    _ group: inout Group, path: [Int], item: ActionOrGroup, index: Int
-  ) {
-    guard !path.isEmpty else { return }
-
-    if path.count == 1 {
+    } else if path.count == 1 {
+      // Insert into direct child group
       let groupIndex = path[0]
       if groupIndex < group.actions.count,
         case .group(var targetGroup) = group.actions[groupIndex]
@@ -623,12 +565,13 @@ struct GroupContentView: View {
         group.actions[groupIndex] = .group(targetGroup)
       }
     } else {
+      // Navigate deeper into nested groups
       let firstIndex = path[0]
       if firstIndex < group.actions.count,
         case .group(var nestedGroup) = group.actions[firstIndex]
       {
         let remainingPath = Array(path.dropFirst())
-        insertIntoNestedGroupRecursive(&nestedGroup, path: remainingPath, item: item, index: index)
+        insertItemIntoGroup(&nestedGroup, item: item, path: remainingPath, index: index)
         group.actions[firstIndex] = .group(nestedGroup)
       }
     }
@@ -849,53 +792,63 @@ struct FloatingDraggedRow: View {
   }
 }
 
-struct ConfigEditorView: View {
+struct ConfigEditorSheetView: View {
   @Binding var group: Group
   @EnvironmentObject var userConfig: UserConfig
   var isRoot: Bool = true
   @Binding var expandedGroups: Set<[Int]>
   @StateObject private var dragState = DragState()
-  @State private var rowFrames: [[Int]: CGRect] = [:]  // State to hold row frames
+  @State private var rowFrames: [[Int]: CGRect] = [:]
+  @State private var isSheetPresented = false
 
   var body: some View {
-    ScrollView {
-      GroupContentView(
-        group: $group, isRoot: isRoot, parentPath: [], expandedGroups: $expandedGroups
-      )
-      .environmentObject(dragState)
-      .onPreferenceChange(RowFrameKey.self) { frames in
-        self.rowFrames = frames
-      }
-      .onAppear {
-        // Set up global cross-hierarchy handlers
-        dragState.globalRemoveHandler = globalRemoveItem
-        dragState.globalInsertHandler = globalInsertItem
-        dragState.globalMoveHandler = globalMoveItem
-        dragState.updateDropTarget = self.updateDropTarget
-      }
-      .background(
-        KeyCapturingView(
-          onCommandUp: moveItemUp,
-          onCommandDown: moveItemDown,
-          onArrowUp: navigateUp,
-          onArrowDown: navigateDown,
-          onCommandRight: expandItem,
-          onCommandLeft: collapseItem
+    VStack(spacing: 0) {
+      ScrollView {
+        GroupContentView(
+          group: $group, isRoot: isRoot, parentPath: [], expandedGroups: $expandedGroups
         )
-      )
-      .padding(
-        EdgeInsets(
-          top: generalPadding, leading: generalPadding,
-          bottom: generalPadding, trailing: 0
-        ))
+        .environmentObject(dragState)
+        .onPreferenceChange(RowFrameKey.self) { frames in
+          self.rowFrames = frames
+        }
+        .onAppear {
+          // Set up global cross-hierarchy handlers
+          dragState.globalRemoveHandler = globalRemoveItem
+          dragState.globalInsertHandler = globalInsertItem
+          dragState.globalMoveHandler = globalMoveItem
+          dragState.updateDropTarget = self.updateDropTarget
+        }
+        .background(
+          KeyCapturingView(
+            onCommandUp: moveItemUp,
+            onCommandDown: moveItemDown,
+            onArrowUp: navigateUp,
+            onArrowDown: navigateDown,
+            onCommandRight: expandItem,
+            onCommandLeft: collapseItem
+          )
+        )
+        .padding(
+          EdgeInsets(
+            top: generalPadding, leading: generalPadding,
+            bottom: generalPadding, trailing: 0
+          )
+        )
+      }
+      .sheet(isPresented: $isSheetPresented, onDismiss: {
+        dragState.focusedItemPath = nil  // Deselect on dismiss
+      }) {
+        inspectorView()
+      }
+      .onChange(of: dragState.focusedItemPath) { path in
+        isSheetPresented = path != nil
+      }
     }
     .background(
-      // Invisible view to capture key events
       KeyEventHandler(dragState: dragState)
     )
     .overlay(
       GeometryReader { geometry in
-        // Floating dragged item - shown at root level so it's always visible
         if let draggedItem = dragState.draggedItem,
           dragState.isDragging,
           dragState.dragLocation != .zero
@@ -908,7 +861,6 @@ struct ConfigEditorView: View {
           )
           .position(
             x: dragState.dragLocation.x - geometry.frame(in: .global).minX - 150,
-            // Align right edge of preview with left edge of drag control
             y: dragState.dragLocation.y - geometry.frame(in: .global).minY
           )
           .zIndex(1000)
@@ -916,6 +868,78 @@ struct ConfigEditorView: View {
         }
       }
     )
+  }
+
+  @ViewBuilder
+  private func inspectorView() -> some View {
+    if let path = dragState.focusedItemPath,
+      let item = getItemAtPath(path, in: group)
+    {
+      let onDelete = {
+        var newGroup = self.group
+        removeItemFromGroup(&newGroup, path: path)
+        self.group = newGroup
+        // Dismiss the sheet by clearing the focus
+        dragState.focusedItemPath = nil
+      }
+
+      let onDuplicate = {
+        var newGroup = self.group
+        let parentPath = Array(path.dropLast())
+        // Duplicate *after* the current item
+        let insertionIndex = path.last! + 1
+        // 'item' is captured from the outer scope
+        insertItemIntoGroup(
+          &newGroup, item: item, path: parentPath, index: insertionIndex)
+        self.group = newGroup
+
+        // Update focus to the newly created item
+        let newFocusPath = parentPath + [insertionIndex]
+        dragState.focusedItemPath = newFocusPath
+      }
+
+      PropertyInspectorView(
+        selectedItem: selectedItemBinding,
+        onDelete: onDelete,
+        onDuplicate: onDuplicate
+      )
+    }
+  }
+
+  private var selectedItemBinding: Binding<ActionOrGroup?> {
+    Binding<ActionOrGroup?>(
+      get: {
+        guard let path = dragState.focusedItemPath else {
+          return nil
+        }
+        return getItemAtPath(path, in: group)
+      },
+      set: { newValue in
+        guard let path = dragState.focusedItemPath, let newItem = newValue else { return }
+        var newGroup = self.group
+        setItemAtPath(&newGroup, path: path, item: newItem)
+        DispatchQueue.main.async {
+          self.group = newGroup
+        }
+      }
+    )
+  }
+
+  private func setItemAtPath(_ group: inout Group, path: [Int], item: ActionOrGroup) {
+    guard !path.isEmpty else { return }
+
+    let index = path[0]
+    guard index < group.actions.count else { return }
+
+    if path.count == 1 {
+      group.actions[index] = item
+    } else {
+      if case .group(var nestedGroup) = group.actions[index] {
+        let remainingPath = Array(path.dropFirst())
+        setItemAtPath(&nestedGroup, path: remainingPath, item: item)
+        group.actions[index] = .group(nestedGroup)
+      }
+    }
   }
 
   private func updateDropTarget(at location: CGPoint) {
@@ -972,9 +996,7 @@ struct ConfigEditorView: View {
     if let pathToExpand = potentialAutoExpandPath, dragState.autoExpandTimer == nil {
       dragState.autoExpandTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: false) { _ in
         // Use withAnimation for a smooth expansion
-        withAnimation(.easeOut(duration: 0.2)) {
-          self.expandedGroups.insert(pathToExpand)
-        }
+        self.expandedGroups.insert(pathToExpand)
         // Give haptic feedback
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
       }
@@ -1054,9 +1076,7 @@ struct ConfigEditorView: View {
   private func ensureGroupExpanded(at path: [Int]) {
     // Expand the target group if it's not already expanded
     if !expandedGroups.contains(path) {
-      withAnimation(.easeOut(duration: 0.2)) {
-        expandedGroups.insert(path)
-      }
+      expandedGroups.insert(path)
     }
   }
 
@@ -1428,47 +1448,92 @@ struct ActionOrGroupRow: View {
     dragState.focusedItemPath == path
   }
 
+  private var rowBackgroundColor: Color {
+    if isFocused {
+      return Color.accentColor.opacity(0.2)  // Selected
+    }
+    if dragState.hoveredItemPath == path {
+      return Color.primary.opacity(0.1)  // Hovered
+    }
+    return Color.clear  // Default
+  }
+
+  private func openSheet() {
+    dragState.focusedItemPath = path
+  }
+
   var body: some View {
-    switch item {
-    case .action:
-      ActionRow(
-        action: Binding(
-          get: {
-            if case .action(let action) = item {
-              return action
-            }
-            // Return a placeholder action if type mismatch during drag
-            return Action(key: "", type: .application, value: "")
-          },
-          set: { newAction in
-            item = .action(newAction)
-          }
-        ),
-        path: path,
-        onDelete: onDelete,
-        onDuplicate: onDuplicate,
-        dragState: dragState
+    let rowContent =
+      VStack {
+        switch item {
+        case .action:
+          ActionRow(
+            action: Binding(
+              get: {
+                if case .action(let action) = item {
+                  return action
+                }
+                return Action(key: "", type: .application, value: "")
+              },
+              set: { newAction in
+                item = .action(newAction)
+              }
+            ),
+            path: path,
+            dragState: dragState
+          )
+        case .group:
+          GroupRow(
+            group: Binding(
+              get: {
+                if case .group(let group) = item {
+                  return group
+                }
+                return Group(key: "", actions: [])
+              },
+              set: { newGroup in
+                item = .group(newGroup)
+              }
+            ),
+            path: path,
+            expandedGroups: $expandedGroups,
+            dragState: dragState
+          )
+        }
+      }
+      .background(
+        Rectangle()
+          .fill(rowBackgroundColor)
+          .cornerRadius(6)
       )
-    case .group:
-      GroupRow(
-        group: Binding(
-          get: {
-            if case .group(let group) = item {
-              return group
+      .onHover { hovering in
+        if hovering {
+          dragState.hoveredItemPath = path
+        } else if dragState.hoveredItemPath == path {
+          dragState.hoveredItemPath = nil
+        }
+      }
+      .onTapGesture {
+        dragState.focusedItemPath = path
+        // If the item is a group and is already focused, toggle its expansion
+        if case .group = item, isFocused {
+          withAnimation(.easeOut(duration: 0.1)) {
+            if expandedGroups.contains(path) {
+              expandedGroups.remove(path)
+            } else {
+              expandedGroups.insert(path)
             }
-            // Return a placeholder group if type mismatch during drag
-            return Group(key: "", actions: [])
-          },
-          set: { newGroup in
-            item = .group(newGroup)
           }
-        ),
-        path: path,
-        expandedGroups: $expandedGroups,
-        onDelete: onDelete,
-        onDuplicate: onDuplicate,
-        dragState: dragState
-      )
+        }
+      }
+
+    HStack {
+      rowContent
+      Spacer()
+      Button("Edit") {
+        openSheet()
+      }
+      .padding(.trailing, generalPadding)
     }
   }
 }
@@ -1543,8 +1608,6 @@ struct IconPickerMenu: View {
 struct ActionRow: View {
   @Binding var action: Action
   var path: [Int]
-  let onDelete: () -> Void
-  let onDuplicate: () -> Void
   @ObservedObject var dragState: DragState
   @FocusState private var isKeyFocused: Bool
   @EnvironmentObject var userConfig: UserConfig
@@ -1555,6 +1618,7 @@ struct ActionRow: View {
 
   var body: some View {
     HStack(spacing: generalPadding) {
+      Spacer().frame(width: 24)
       KeyButton(
         text: Binding(
           get: { action.key ?? "" },
@@ -1562,15 +1626,6 @@ struct ActionRow: View {
         ), placeholder: "Key", validationError: validationErrorForKey,
         onKeyChanged: { _, _ in userConfig.finishEditingKey() }
       )
-
-      Picker("Type", selection: $action.type) {
-        Text("Application").tag(Type.application)
-        Text("URL").tag(Type.url)
-        Text("Command").tag(Type.command)
-        Text("Folder").tag(Type.folder)
-      }
-      .frame(minWidth: 100, maxWidth: 120)
-      .labelsHidden()
 
       IconPickerMenu(
         item: Binding(
@@ -1581,45 +1636,19 @@ struct ActionRow: View {
             }
           }
         ))
+        .padding(.leading, 8)
 
-      switch action.type {
-      case .application:
-        Button("Choose…") {
-          let panel = NSOpenPanel()
-          panel.allowedContentTypes = [.applicationBundle, .application]
-          panel.canChooseFiles = true
-          panel.canChooseDirectories = true
-          panel.allowsMultipleSelection = false
-          panel.directoryURL = URL(fileURLWithPath: "/Applications")
-
-          if panel.runModal() == .OK {
-            action.value = panel.url?.path ?? ""
-          }
-        }
-        Text(action.value).truncationMode(.middle).lineLimit(1)
-      case .folder:
-        Button("Choose…") {
-          let panel = NSOpenPanel()
-          panel.allowsMultipleSelection = false
-          panel.canChooseDirectories = true
-          panel.canChooseFiles = false
-          panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
-
-          if panel.runModal() == .OK {
-            action.value = panel.url?.path ?? ""
-          }
-        }
-        Text(action.value).truncationMode(.middle).lineLimit(1)
-      default:
-        TextField("Value", text: $action.value)
-      }
+      TextField("", text: $action.label._orEmpty(), prompt: Text(action.bestGuessDisplayName))
+        .frame(width: 189, height: 24)
+        .padding(.leading, 8)
+        .textFieldStyle(.plain)
+        .background(
+          RoundedRectangle(cornerRadius: 5)
+            .fill(Color(.controlBackgroundColor))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 5))
 
       Spacer()
-
-      TextField(action.bestGuessDisplayName, text: $action.label ?? "").frame(
-        width: 120
-      )
-      .padding(.trailing, generalPadding)
 
       Image(systemName: "line.3.horizontal")
         .foregroundColor(.secondary)
@@ -1632,25 +1661,6 @@ struct ActionRow: View {
             NSCursor.arrow.set()
           }
         }
-
-      Button(role: .none, action: onDuplicate) {
-        Image(systemName: "document.on.document")
-      }
-      .buttonStyle(.plain)
-
-      Button(role: .destructive, action: onDelete) {
-        Image(systemName: "trash")
-      }
-      .buttonStyle(.plain)
-      .padding(.trailing, generalPadding)
-    }
-    .background(
-      Rectangle()
-        .fill(isFocused ? Color.accentColor.opacity(0.2) : Color.clear)
-        .cornerRadius(6)
-    )
-    .onTapGesture {
-      dragState.focusedItemPath = path
     }
   }
 
@@ -1675,8 +1685,6 @@ struct GroupRow: View {
   var path: [Int]
   @Binding var expandedGroups: Set<[Int]>
   @FocusState private var isKeyFocused: Bool
-  let onDelete: () -> Void
-  let onDuplicate: () -> Void
   @ObservedObject var dragState: DragState
   @EnvironmentObject var userConfig: UserConfig
 
@@ -1687,6 +1695,24 @@ struct GroupRow: View {
   var body: some View {
     LazyVStack(spacing: generalPadding) {
       HStack(spacing: generalPadding) {
+        Button(
+          role: .none,
+          action: {
+            withAnimation(.easeOut(duration: 0.1)) {
+              if expandedGroups.contains(path) {
+                expandedGroups.remove(path)
+              } else {
+                expandedGroups.insert(path)
+              }
+            }
+          }
+        ) {
+          Image(systemName: "chevron.right")
+            .rotationEffect(.degrees(expandedGroups.contains(path) ? 90 : 0))
+            .padding(4)
+        }.buttonStyle(.plain)
+        .frame(width: 24, alignment: .center)
+
         KeyButton(
           text: Binding(
             get: { group.key ?? "" },
@@ -1712,40 +1738,19 @@ struct GroupRow: View {
               }
             }
           ))
+          .padding(.leading, 8)
 
-        Button(
-          role: .none,
-          action: {
-            withAnimation(.easeOut(duration: 0.1)) {
-              if expandedGroups.contains(path) {
-                expandedGroups.remove(path)
-              } else {
-                expandedGroups.insert(path)
-              }
-            }
-          }
-        ) {
-          Image(systemName: "chevron.right")
-            .rotationEffect(.degrees(expandedGroups.contains(path) ? 90 : 0))
-            .padding(.horizontal, -3)
-        }.buttonStyle(.bordered)
-
-        if path.count == 1 && group.key != "", let key = group.key {
-          KeyboardShortcuts.Recorder(for: KeyboardShortcuts.Name("group-\(key)")) { shortcut in
-            if shortcut != nil {
-              Defaults[.groupShortcuts].insert(key)
-            } else {
-              Defaults[.groupShortcuts].remove(key)
-            }
-
-            (NSApplication.shared.delegate as! AppDelegate).registerGlobalShortcuts()
-          }
-        }
+        TextField("Label", text: $group.label._orEmpty())
+          .frame(width: 189, height: 24)
+          .padding(.leading, 8)
+          .textFieldStyle(.plain)
+          .background(
+            RoundedRectangle(cornerRadius: 5)
+              .fill(Color(.controlBackgroundColor))
+          )
+          .clipShape(RoundedRectangle(cornerRadius: 5))
 
         Spacer(minLength: 0)
-
-        TextField("Label", text: $group.label ?? "").frame(width: 120)
-          .padding(.trailing, generalPadding)
 
         Image(systemName: "line.3.horizontal")
           .foregroundColor(.secondary)
@@ -1758,25 +1763,6 @@ struct GroupRow: View {
               NSCursor.arrow.set()
             }
           }
-
-        Button(role: .none, action: onDuplicate) {
-          Image(systemName: "document.on.document")
-        }
-        .buttonStyle(.plain)
-
-        Button(role: .destructive, action: onDelete) {
-          Image(systemName: "trash")
-        }
-        .buttonStyle(.plain)
-        .padding(.trailing, generalPadding)
-      }
-      .background(
-        Rectangle()
-          .fill(isFocused ? Color.accentColor.opacity(0.2) : Color.clear)
-          .cornerRadius(6)
-      )
-      .onTapGesture {
-        dragState.focusedItemPath = path
       }
     }
     .padding(.horizontal, 0)
@@ -1831,7 +1817,7 @@ struct GroupRow: View {
 
   let userConfig = UserConfig()
 
-  return ConfigEditorView(group: .constant(group), expandedGroups: .constant(Set<[Int]>()))
+  return ConfigEditorSheetView(group: .constant(group), expandedGroups: .constant(Set<[Int]>()))
     .frame(width: 720, height: 500)
     .environmentObject(userConfig)
 }
@@ -1865,3 +1851,185 @@ extension EnvironmentValues {
   }
 }
 
+struct PropertyInspectorView: View {
+  @Binding var selectedItem: ActionOrGroup?
+  @Environment(\.dismiss) private var dismiss
+  let onDelete: () -> Void
+  let onDuplicate: () -> Void
+  @State private var showingDeleteConfirmation = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Properties")
+        .font(.headline)
+        .padding(.bottom, 4)
+
+      if let selectedItem = selectedItem {
+        switch selectedItem {
+        case .action(let action):
+          ActionDetailView(action: Binding(
+            get: { action },
+            set: { self.selectedItem = .action($0) }
+          ))
+        case .group(let group):
+          GroupDetailView(group: Binding(
+            get: { group },
+            set: { self.selectedItem = .group($0) }
+          ))
+        }
+      } else {
+        Text("Select an item to see its properties.")
+          .foregroundColor(.secondary)
+      }
+
+      Spacer()
+
+      HStack {
+        Button(role: .destructive, action: {
+          showingDeleteConfirmation = true
+        }) {
+          Text("Delete")
+        }
+        Spacer()
+        Button(action: onDuplicate) {
+          Text("Duplicate")
+        }
+        Button("Done") {
+          dismiss()
+        }
+        .keyboardShortcut(.defaultAction)
+      }
+    }
+    .padding()
+    .background(Color(.windowBackgroundColor))
+    .cornerRadius(8)
+    .alert(
+      "Are you sure you want to delete this item?", isPresented: $showingDeleteConfirmation
+    ) {
+      Button("Delete", role: .destructive) {
+        onDelete()
+        dismiss()
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This action cannot be undone.")
+    }
+  }
+}
+
+struct GroupDetailView: View {
+  @Binding var group: Group
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .top) {
+        actionIcon(item: .group(group), iconSize: NSSize(width: 32, height: 32))
+          .padding(.top, 4)
+
+        VStack(alignment: .leading) {
+          TextField("Label", text: $group.label._orEmpty())
+        }
+      }
+
+      Divider().padding(.vertical, 4)
+
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Direct Access Shortcut")
+          .font(.headline)
+        Text(
+          "Optionally, set a global shortcut to open this group directly, bypassing the main window."
+        )
+        .font(.caption)
+        .foregroundColor(.secondary)
+
+        if let key = group.key, !key.isEmpty {
+          KeyboardShortcuts.Recorder(for: KeyboardShortcuts.Name("group-\(key)")) { shortcut in
+            if shortcut != nil {
+              Defaults[.groupShortcuts].insert(key)
+            } else {
+              Defaults[.groupShortcuts].remove(key)
+            }
+            (NSApplication.shared.delegate as! AppDelegate).registerGlobalShortcuts()
+          }
+        } else {
+          Text("Set a 'Group Key' in the main list to enable direct access shortcuts.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.top, 4)
+        }
+      }
+    }
+  }
+}
+
+struct ActionDetailView: View {
+    @Binding var action: Action
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Type", selection: $action.type) {
+                Text("Application").tag(Type.application)
+                Text("URL").tag(Type.url)
+                Text("Command").tag(Type.command)
+                Text("Folder").tag(Type.folder)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .onChange(of: action.type) {
+                action.value = ""
+            }
+
+            HStack(alignment: .top) {
+                actionIcon(item: .action(action), iconSize: NSSize(width: 32, height: 32))
+                    .padding(.top, 4)
+
+                VStack(alignment: .leading) {
+                    switch action.type {
+                    case .application:
+                        TextField("Application Path", text: $action.value, prompt: Text("/Applications/Safari.app"))
+                            .truncationMode(.middle)
+                        Button("Choose…") {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.application]
+                            panel.canChooseFiles = true
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK, let path = panel.url?.path {
+                                action.value = path
+                            }
+                        }
+                    case .folder:
+                        TextField("Folder Path", text: $action.value, prompt: Text("~/Downloads"))
+                            .truncationMode(.middle)
+                        Button("Choose…") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK, let path = panel.url?.path {
+                                action.value = path
+                            }
+                        }
+                    case .url:
+                        TextField("URL", text: $action.value, prompt: Text("https://apple.com"))
+                    case .command:
+                        TextField("Shell Command", text: $action.value, prompt: Text("say 'hello'"))
+                    case .group:
+                        EmptyView()
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension Binding where Value == String? {
+    func _orEmpty() -> Binding<String> {
+        return Binding<String>(
+            get: {
+                return self.wrappedValue ?? ""
+            },
+            set: {
+                self.wrappedValue = $0.isEmpty ? nil : $0
+            }
+        )
+    }
+}
