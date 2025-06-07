@@ -12,7 +12,9 @@ enum ForTheHorde {
       super.init(
         controller: controller,
         contentRect: NSRect(
-          x: 0, y: 0, width: MysteryBox.size, height: MysteryBox.size))
+          x: 0, y: 0, width: MysteryBox.size, height: MysteryBox.size
+        )
+      )
 
       backgroundColor = .clear
       isOpaque = false
@@ -28,7 +30,7 @@ enum ForTheHorde {
       let center = screen.center()
       let newOriginX = center.x - MysteryBox.size / 2
       let newOriginY = center.y + MysteryBox.size / 8
-      self.setFrameOrigin(NSPoint(x: newOriginX, y: newOriginY))
+      setFrameOrigin(NSPoint(x: newOriginX, y: newOriginY))
 
       // Trigger animation by updating the shared state
       animationState.isShowing = true
@@ -44,7 +46,8 @@ enum ForTheHorde {
         },
         completionHandler: {
           after?()
-        })
+        }
+      )
     }
 
     override func hide(after: (() -> Void)? = nil) {
@@ -60,7 +63,8 @@ enum ForTheHorde {
         },
         completionHandler: {
           super.hide(after: after)
-        })
+        }
+      )
     }
 
     override func notFound() {
@@ -109,7 +113,6 @@ enum ForTheHorde {
         } else {
           text
         }
-
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
       .scaleEffect(scale)
@@ -145,6 +148,7 @@ struct Legacy_MainView_Previews: PreviewProvider {
       .environmentObject(UserState(userConfig: UserConfig()))
       .environmentObject(ForTheHorde.AnimationState())
       .frame(
-        width: MysteryBox.size, height: MysteryBox.size, alignment: .center)
+        width: MysteryBox.size, height: MysteryBox.size, alignment: .center
+      )
   }
 }

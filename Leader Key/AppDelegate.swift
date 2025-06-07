@@ -34,7 +34,8 @@ class AppDelegate: NSObject, NSApplicationDelegate,
         toolbarIcon: NSImage(named: NSImage.advancedName)!,
         contentView: {
           AdvancedPane().environmentObject(self.config)
-        }),
+        }
+      ),
     ],
     style: .segmentedControl
   )
@@ -49,7 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
     UNUserNotificationCenter.current().requestAuthorization(options: [
       .alert, .badge, .sound,
     ]) {
-      granted, error in
+      _, error in
       if let error = error {
         print("Error requesting notification permission: \(error)")
       }
@@ -69,7 +70,8 @@ class AppDelegate: NSObject, NSApplicationDelegate,
           fileURL: config.url,
           callback: {
             self.config.reloadConfig()
-          })
+          }
+        )
         self.fileMonitor.startMonitoring()
       }
     }
@@ -102,20 +104,20 @@ class AppDelegate: NSObject, NSApplicationDelegate,
   }
 
   func activate() {
-    if self.controller.window.isKeyWindow {
+    if controller.window.isKeyWindow {
       switch Defaults[.reactivateBehavior] {
       case .hide:
-        self.hide()
+        hide()
       case .reset:
-        self.controller.userState.clear()
+        controller.userState.clear()
       case .nothing:
         return
       }
-    } else if self.controller.window.isVisible {
+    } else if controller.window.isVisible {
       // should never happen as the window will self-hide when not key
-      self.controller.window.makeKeyAndOrderFront(nil)
+      controller.window.makeKeyAndOrderFront(nil)
     } else {
-      self.show()
+      show()
     }
   }
 
@@ -137,7 +139,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
     }
   }
 
-  func applicationWillTerminate(_ notification: Notification) {
+  func applicationWillTerminate(_: Notification) {
     config.saveConfig()
   }
 
@@ -162,7 +164,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
   }
 
   func standardUserDriverWillHandleShowingUpdate(
-    _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem,
+    _: Bool, forUpdate update: SUAppcastItem,
     state: SPUUserUpdateState
   ) {
     NSApp.setActivationPolicy(.regular)
@@ -176,13 +178,14 @@ class AppDelegate: NSObject, NSApplicationDelegate,
 
       let request = UNNotificationRequest(
         identifier: updateLocationIdentifier, content: content,
-        trigger: nil)
+        trigger: nil
+      )
       UNUserNotificationCenter.current().add(request)
     }
   }
 
   func standardUserDriverDidReceiveUserAttention(
-    forUpdate update: SUAppcastItem
+    forUpdate _: SUAppcastItem
   ) {
     NSApp.dockTile.badgeLabel = ""
 
@@ -199,7 +202,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
   // MARK: - UNUserNotificationCenter Delegate
 
   func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
+    _: UNUserNotificationCenter,
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
@@ -220,7 +223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate,
 
   // MARK: - URL Scheme Handling
 
-  func application(_ application: NSApplication, open urls: [URL]) {
+  func application(_: NSApplication, open urls: [URL]) {
     for url in urls {
       handleURL(url)
     }

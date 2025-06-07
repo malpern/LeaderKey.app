@@ -65,12 +65,14 @@ class UserConfig: ObservableObject {
 
   static func defaultDirectory() -> String {
     let appSupportDir = FileManager.default.urls(
-      for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      for: .applicationSupportDirectory, in: .userDomainMask
+    )[0]
     let path = (appSupportDir.path as NSString).appendingPathComponent(
       "Leader Key")
     do {
       try FileManager.default.createDirectory(
-        atPath: path, withIntermediateDirectories: true)
+        atPath: path, withIntermediateDirectories: true
+      )
     } catch {
       fatalError("Failed to create config directory")
     }
@@ -188,7 +190,8 @@ class UserConfig: ObservableObject {
 
   private func handleError(_ error: Error, critical: Bool) {
     alertHandler.showAlert(
-      style: critical ? .critical : .warning, message: "\(error)")
+      style: critical ? .critical : .warning, message: "\(error)"
+    )
     if critical {
       root = emptyRoot
       validationErrors = []
@@ -257,7 +260,8 @@ struct Action: Item, Codable, Equatable {
     switch type {
     case .application:
       return (value as NSString).lastPathComponent.replacingOccurrences(
-        of: ".app", with: "")
+        of: ".app", with: ""
+      )
     case .command:
       return value.components(separatedBy: " ").first ?? value
     case .folder:

@@ -84,15 +84,12 @@ class StatusItem {
       switch event {
       case .willActivate:
         self.appearance = .active
-        break
       case .willDeactivate:
         self.appearance = .normal
-        break
       default:
         break
       }
     }.store(in: &cancellables)
-
   }
 
   func disable() {

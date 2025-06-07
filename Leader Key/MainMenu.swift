@@ -9,14 +9,17 @@ class MainMenu: NSMenu {
     appMenu.submenu?.items = [
       NSMenuItem(
         title: "About Leader Key",
-        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""),
+        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""
+      ),
       .separator(),
       NSMenuItem(
         title: "Preferences...", action: #selector(AppDelegate.settingsMenuItemActionHandler(_:)),
-        keyEquivalent: ","),
+        keyEquivalent: ","
+      ),
       .separator(),
       NSMenuItem(
-        title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"),
+        title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"
+      ),
       .separator(),
       NSMenuItem(
         title: "Quit Leader Key", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
@@ -38,7 +41,8 @@ class MainMenu: NSMenu {
     items = [appMenu, editMenu]
   }
 
-  required init(coder: NSCoder) {
+  @available(*, unavailable)
+  required init(coder _: NSCoder) {
     fatalError("init(coder:) has not been implemented")
   }
 }

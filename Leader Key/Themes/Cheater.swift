@@ -15,7 +15,7 @@ enum Cheater {
       let center = screen.center()
       let newOriginX = center.x - frame.width / 2
       let newOriginY = center.y - frame.height / 2 + frame.height / 8
-      self.setFrameOrigin(NSPoint(x: newOriginX, y: newOriginY))
+      setFrameOrigin(NSPoint(x: newOriginX, y: newOriginY))
 
       makeKeyAndOrderFront(nil)
 

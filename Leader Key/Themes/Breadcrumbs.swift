@@ -9,7 +9,8 @@ enum Breadcrumbs {
     required init(controller: Controller) {
       super.init(
         controller: controller,
-        contentRect: NSRect(x: 0, y: 0, width: 0, height: 0))
+        contentRect: NSRect(x: 0, y: 0, width: 0, height: 0)
+      )
 
       let view = MainView().environmentObject(self.controller.userState)
       contentView = NSHostingView(rootView: view)
@@ -17,32 +18,36 @@ enum Breadcrumbs {
 
     override func show(on screen: NSScreen, after: (() -> Void)? = nil) {
       if controller.userState.navigationPath.isEmpty == true {
-        self.setFrame(
+        setFrame(
           CGRect(
             x: Breadcrumbs.margin,
             y: Breadcrumbs.margin,
             width: Breadcrumbs.dimension,
-            height: Breadcrumbs.dimension),
-          display: true)
+            height: Breadcrumbs.dimension
+          ),
+          display: true
+        )
       } else {
-        self.setFrame(
+        setFrame(
           CGRect(
             x: Breadcrumbs.margin,
             y: Breadcrumbs.margin,
             width: 200,
-            height: Breadcrumbs.dimension),
-          display: true)
+            height: Breadcrumbs.dimension
+          ),
+          display: true
+        )
 
-        self.contentAspectRatio = NSSize(width: 0, height: Breadcrumbs.dimension)
-        self.contentMinSize = NSSize(width: 80, height: Breadcrumbs.dimension)
-        self.contentMaxSize = NSSize(
+        contentAspectRatio = NSSize(width: 0, height: Breadcrumbs.dimension)
+        contentMinSize = NSSize(width: 80, height: Breadcrumbs.dimension)
+        contentMaxSize = NSSize(
           width: screen.frame.width - (Breadcrumbs.margin * 2),
           height: Breadcrumbs.dimension
         )
       }
       let newOriginX = screen.visibleFrame.origin.x + Breadcrumbs.margin
       let newOriginY = screen.visibleFrame.origin.y + Breadcrumbs.margin
-      self.setFrameOrigin(NSPoint(x: newOriginX, y: newOriginY))
+      setFrameOrigin(NSPoint(x: newOriginX, y: newOriginY))
 
       makeKeyAndOrderFront(nil)
 
@@ -61,10 +66,11 @@ enum Breadcrumbs {
       shake()
     }
 
-    override func cheatsheetOrigin(cheatsheetSize: NSSize) -> NSPoint {
+    override func cheatsheetOrigin(cheatsheetSize _: NSSize) -> NSPoint {
       return NSPoint(
         x: frame.minX,
-        y: frame.maxY + Breadcrumbs.margin)
+        y: frame.maxY + Breadcrumbs.margin
+      )
     }
   }
 

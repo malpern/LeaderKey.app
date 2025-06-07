@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-typealias KeyChangedFn = ((_ before: String?, _ value: String?) -> Void)
+typealias KeyChangedFn = (_ before: String?, _ value: String?) -> Void
 
 struct KeyButton: View {
   @Binding var text: String
@@ -31,7 +31,8 @@ struct KeyButton: View {
     .buttonStyle(PlainButtonStyle())
     .background(
       KeyListenerView(
-        isListening: $isListening, text: $text, oldValue: $oldValue, onKeyChanged: onKeyChanged))
+        isListening: $isListening, text: $text, oldValue: $oldValue, onKeyChanged: onKeyChanged
+      ))
   }
 
   private var backgroundColor: Color {
@@ -61,7 +62,7 @@ struct KeyListenerView: NSViewRepresentable {
   @Binding var oldValue: String
   var onKeyChanged: KeyChangedFn?
 
-  func makeNSView(context: Context) -> NSView {
+  func makeNSView(context _: Context) -> NSView {
     let view = KeyListenerNSView()
     view.isListening = $isListening
     view.text = $text
@@ -70,7 +71,7 @@ struct KeyListenerView: NSViewRepresentable {
     return view
   }
 
-  func updateNSView(_ nsView: NSView, context: Context) {
+  func updateNSView(_ nsView: NSView, context _: Context) {
     if let view = nsView as? KeyListenerNSView {
       view.isListening = $isListening
       view.text = $text

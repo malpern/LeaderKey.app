@@ -113,9 +113,9 @@ struct FavIconImage: View {
 
   var body: some View {
     if url.starts(with: "http:") || url.starts(with: "https:") {
-      KFImage.url(URL(string: url)).placeholder({
+      KFImage.url(URL(string: url)).placeholder {
         fallback
-      }).resizable()
+      }.resizable()
         .padding(4)
         .frame(width: size.width, height: size.height, alignment: .center)
     } else {

@@ -34,7 +34,8 @@ extension NSWindow {
     let toFrame = frame
     let fromFrame = NSRect(
       x: toFrame.minX, y: toFrame.minY - distance, width: toFrame.width,
-      height: toFrame.height)
+      height: toFrame.height
+    )
 
     setFrame(fromFrame, display: true)
     alphaValue = 0
@@ -55,7 +56,8 @@ extension NSWindow {
     let fromFrame = frame
     let toFrame = NSRect(
       x: fromFrame.minX, y: fromFrame.minY - distance, width: fromFrame.width,
-      height: fromFrame.height)
+      height: fromFrame.height
+    )
 
     setFrame(fromFrame, display: true)
     alphaValue = 1
@@ -82,11 +84,13 @@ extension NSWindow {
     for _ in 0...numberOfShakes - 1 {
       shakePath.addLine(
         to: CGPoint(
-          x: NSMinX(frame) - frame.size.width * vigourOfShake, y: NSMinY(frame))
+          x: NSMinX(frame) - frame.size.width * vigourOfShake, y: NSMinY(frame)
+        )
       )
       shakePath.addLine(
         to: CGPoint(
-          x: NSMinX(frame) + frame.size.width * vigourOfShake, y: NSMinY(frame))
+          x: NSMinX(frame) + frame.size.width * vigourOfShake, y: NSMinY(frame)
+        )
       )
     }
 

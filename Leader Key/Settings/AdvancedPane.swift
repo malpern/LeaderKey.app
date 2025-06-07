@@ -106,15 +106,17 @@ struct AdvancedPane: View {
         .padding(.vertical, 2)
 
         Defaults.Toggle(
-          "Show expanded groups in cheatsheet", key: .expandGroupsInCheatsheet)
+          "Show expanded groups in cheatsheet", key: .expandGroupsInCheatsheet
+        )
         Defaults.Toggle(
-          "Show icons", key: .showAppIconsInCheatsheet)
+          "Show icons", key: .showAppIconsInCheatsheet
+        )
         Defaults.Toggle(
           "Use favicons for URLs", key: .showFaviconsInCheatsheet
         ).padding(.leading, 20).disabled(!showAppIconsInCheatsheet)
         Defaults.Toggle(
-          "Show item details in cheatsheet", key: .showDetailsInCheatsheet)
-
+          "Show item details in cheatsheet", key: .showDetailsInCheatsheet
+        )
       }
 
       Settings.Section(title: "Activation", bottomDivider: true) {
@@ -147,7 +149,8 @@ struct AdvancedPane: View {
       Settings.Section(title: "Other") {
         Defaults.Toggle("Show Leader Key in menubar", key: .showMenuBarIcon)
         Defaults.Toggle(
-          "Force English keyboard layout", key: .forceEnglishKeyboardLayout)
+          "Force English keyboard layout", key: .forceEnglishKeyboardLayout
+        )
       }
     }
   }

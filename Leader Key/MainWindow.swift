@@ -39,7 +39,7 @@ class MainWindow: PanelWindow, NSWindowDelegate {
     delegate = self
   }
 
-  func windowDidResignKey(_ notification: Notification) {
+  func windowDidResignKey(_: Notification) {
     controller.hide()
   }
 
@@ -55,7 +55,7 @@ class MainWindow: PanelWindow, NSWindowDelegate {
     controller.keyDown(with: event)
   }
 
-  func show(on screen: NSScreen, after: (() -> Void)?) {
+  func show(on _: NSScreen, after: (() -> Void)?) {
     makeKeyAndOrderFront(nil)
     after?()
   }
@@ -65,10 +65,9 @@ class MainWindow: PanelWindow, NSWindowDelegate {
     after?()
   }
 
-  func notFound() {
-  }
+  func notFound() {}
 
-  func cheatsheetOrigin(cheatsheetSize: NSSize) -> NSPoint {
+  func cheatsheetOrigin(cheatsheetSize _: NSSize) -> NSPoint {
     return NSPoint(x: 0, y: 0)
   }
 }

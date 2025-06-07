@@ -8,37 +8,51 @@ var defaultsSuite =
 
 extension Defaults.Keys {
   static let configDir = Key<String>(
-    "configDir", default: UserConfig.defaultDirectory(), suite: defaultsSuite)
+    "configDir", default: UserConfig.defaultDirectory(), suite: defaultsSuite
+  )
   static let showMenuBarIcon = Key<Bool>(
-    "showInMenubar", default: true, suite: defaultsSuite)
+    "showInMenubar", default: true, suite: defaultsSuite
+  )
   static let forceEnglishKeyboardLayout = Key<Bool>(
-    "forceEnglishKeyboardLayout", default: false, suite: defaultsSuite)
+    "forceEnglishKeyboardLayout", default: false, suite: defaultsSuite
+  )
   static let modifierKeyConfiguration = Key<ModifierKeyConfig>(
-    "modifierKeyConfiguration", default: .controlGroupOptionSticky, suite: defaultsSuite)
+    "modifierKeyConfiguration", default: .controlGroupOptionSticky, suite: defaultsSuite
+  )
   static let theme = Key<Theme>(
-    "theme", default: .mysteryBox, suite: defaultsSuite)
+    "theme", default: .mysteryBox, suite: defaultsSuite
+  )
 
   static let autoOpenCheatsheet = Key<AutoOpenCheatsheetSetting>(
     "autoOpenCheatsheet",
-    default: .delay, suite: defaultsSuite)
+    default: .delay, suite: defaultsSuite
+  )
   static let cheatsheetDelayMS = Key<Int>(
-    "cheatsheetDelayMS", default: 2000, suite: defaultsSuite)
+    "cheatsheetDelayMS", default: 2000, suite: defaultsSuite
+  )
   static let expandGroupsInCheatsheet = Key<Bool>(
-    "expandGroupsInCheatsheet", default: false, suite: defaultsSuite)
+    "expandGroupsInCheatsheet", default: false, suite: defaultsSuite
+  )
   static let showAppIconsInCheatsheet = Key<Bool>(
-    "showAppIconsInCheatsheet", default: true, suite: defaultsSuite)
+    "showAppIconsInCheatsheet", default: true, suite: defaultsSuite
+  )
   static let showDetailsInCheatsheet = Key<Bool>(
-    "showDetailsInCheatsheet", default: true, suite: defaultsSuite)
+    "showDetailsInCheatsheet", default: true, suite: defaultsSuite
+  )
   static let showFaviconsInCheatsheet = Key<Bool>(
-    "showFaviconsInCheatsheet", default: true, suite: defaultsSuite)
+    "showFaviconsInCheatsheet", default: true, suite: defaultsSuite
+  )
   static let reactivateBehavior = Key<ReactivateBehavior>(
-    "reactivateBehavior", default: .hide, suite: defaultsSuite)
+    "reactivateBehavior", default: .hide, suite: defaultsSuite
+  )
   static let screen = Key<Screen>(
-    "screen", default: .primary, suite: defaultsSuite)
+    "screen", default: .primary, suite: defaultsSuite
+  )
 
   static let groupShortcuts = Key<Set<String>>(
     "groupShortcuts",
-    default: Set(), suite: defaultsSuite)
+    default: Set(), suite: defaultsSuite
+  )
 }
 
 enum AutoOpenCheatsheetSetting: String, Defaults.Serializable {

@@ -36,7 +36,7 @@ extension View {
   func pulsate(duration: TimeInterval = Pulsate.singleDurationS, targetScale: CGFloat = 1.3)
     -> some View
   {
-    self.modifier(Pulsate(duration: duration, targetScale: targetScale))
+    modifier(Pulsate(duration: duration, targetScale: targetScale))
   }
 }
 

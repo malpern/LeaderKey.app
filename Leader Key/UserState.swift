@@ -21,7 +21,7 @@ final class UserState: ObservableObject {
     self.userConfig = userConfig
     display = lastChar
     self.isShowingRefreshState = isShowingRefreshState
-    self.navigationPath = []
+    navigationPath = []
   }
 
   func clear() {

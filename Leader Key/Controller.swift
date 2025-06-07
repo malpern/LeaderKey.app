@@ -51,7 +51,7 @@ class Controller {
       }
     }.store(in: &cancellables)
 
-    self.cheatsheetWindow = Cheatsheet.createWindow(for: userState)
+    cheatsheetWindow = Cheatsheet.createWindow(for: userState)
   }
 
   func show() {
@@ -99,7 +99,8 @@ class Controller {
       case ",":
         NSApp.sendAction(
           #selector(AppDelegate.settingsMenuItemActionHandler(_:)), to: nil,
-          from: nil)
+          from: nil
+        )
         hide()
         return
       case "w":
@@ -281,7 +282,8 @@ class Controller {
     case .application:
       NSWorkspace.shared.openApplication(
         at: URL(fileURLWithPath: action.value),
-        configuration: NSWorkspace.OpenConfiguration())
+        configuration: NSWorkspace.OpenConfiguration()
+      )
     case .url:
       openURL(action)
     case .command:
@@ -305,7 +307,8 @@ class Controller {
   private func openURL(_ action: Action) {
     guard let url = URL(string: action.value) else {
       showAlert(
-        title: "Invalid URL", message: "Failed to parse URL: \(action.value)")
+        title: "Invalid URL", message: "Failed to parse URL: \(action.value)"
+      )
       return
     }
 
@@ -321,11 +324,13 @@ class Controller {
     if scheme == "http" || scheme == "https" {
       NSWorkspace.shared.open(
         url,
-        configuration: NSWorkspace.OpenConfiguration())
+        configuration: NSWorkspace.OpenConfiguration()
+      )
     } else {
       NSWorkspace.shared.open(
         url,
-        configuration: DontActivateConfiguration.shared.configuration)
+        configuration: DontActivateConfiguration.shared.configuration
+      )
     }
   }
 
