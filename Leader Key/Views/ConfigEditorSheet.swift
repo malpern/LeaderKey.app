@@ -1,9 +1,9 @@
+import AppKit
 import Combine
 import Defaults
 import KeyboardShortcuts
 import SwiftUI
 import SymbolPicker
-import AppKit
 
 let generalPadding: CGFloat = 8
 
@@ -391,6 +391,7 @@ struct GroupContentView: View {
           handleGlobalDragMove: handleGlobalDragMove,
           endDrag: endDrag
         )
+        .environmentObject(userConfig)
 
         // If the item is an expanded group, recursively render its contents
         if case .group = item, expandedGroups.contains(currentPath) {
@@ -422,8 +423,9 @@ struct GroupContentView: View {
       // Final drop zone at the end of a group
       if !group.actions.isEmpty {
         DropZoneView(
-          isActive: dragState.currentDropTarget == DropTarget(
-            path: parentPath, index: group.actions.count),
+          isActive: dragState.currentDropTarget
+            == DropTarget(
+              path: parentPath, index: group.actions.count),
           performDrop: {
             performDrop(at: DropTarget(path: parentPath, index: group.actions.count))
           }
@@ -477,10 +479,10 @@ struct GroupContentView: View {
   private func performFinalDrop() {
     // Safely unwrap all necessary properties and handlers for the drag operation.
     guard let draggedItem = dragState.draggedItem,
-          let fromPath = dragState.draggedFromPath,
-          let dropTarget = dragState.currentDropTarget,
-          let globalRemoveHandler = dragState.globalRemoveHandler,
-          let globalInsertHandler = dragState.globalInsertHandler
+      let fromPath = dragState.draggedFromPath,
+      let dropTarget = dragState.currentDropTarget,
+      let globalRemoveHandler = dragState.globalRemoveHandler,
+      let globalInsertHandler = dragState.globalInsertHandler
     else { return }
 
     // Create a new, independent reference to the item being moved.
@@ -499,12 +501,14 @@ struct GroupContentView: View {
     } else if adjustedPath.starts(with: fromPath.dropLast()) && fromPath.last! < adjustedIndex {
       // Moving item to a later position in the same group.
       adjustedIndex -= 1
-    } else if let (commonAncestor, fromBranch, toBranch) = findCommonAncestor(from: fromPath, to: adjustedPath),
-              !fromBranch.isEmpty, !toBranch.isEmpty, fromBranch[0] < toBranch[0] {
-        // Find the index in the adjusted path that needs to be decremented.
-        if commonAncestor.count < adjustedPath.count {
-            adjustedPath[commonAncestor.count] -= 1
-        }
+    } else if let (commonAncestor, fromBranch, toBranch) = findCommonAncestor(
+      from: fromPath, to: adjustedPath),
+      !fromBranch.isEmpty, !toBranch.isEmpty, fromBranch[0] < toBranch[0]
+    {
+      // Find the index in the adjusted path that needs to be decremented.
+      if commonAncestor.count < adjustedPath.count {
+        adjustedPath[commonAncestor.count] -= 1
+      }
     }
 
     // 3. Insert the item at the new, correct location.
@@ -518,13 +522,13 @@ struct GroupContentView: View {
     let minLength = min(path1.count, path2.count)
     var commonAncestor: [Int] = []
     for i in 0..<minLength {
-        if path1[i] == path2[i] {
-            commonAncestor.append(path1[i])
-        } else {
-            let fromBranch = Array(path1.suffix(from: i))
-            let toBranch = Array(path2.suffix(from: i))
-            return (commonAncestor, fromBranch, toBranch)
-        }
+      if path1[i] == path2[i] {
+        commonAncestor.append(path1[i])
+      } else {
+        let fromBranch = Array(path1.suffix(from: i))
+        let toBranch = Array(path2.suffix(from: i))
+        return (commonAncestor, fromBranch, toBranch)
+      }
     }
     let fromBranch = Array(path1.suffix(from: minLength))
     let toBranch = Array(path2.suffix(from: minLength))
@@ -605,6 +609,7 @@ struct ConfigRowContainer: View {
   let startDrag: (ActionOrGroup, [Int]) -> Void
   let handleGlobalDragMove: (DragGesture.Value) -> Void
   let endDrag: () -> Void
+  @EnvironmentObject var userConfig: UserConfig
 
   var body: some View {
     VStack(spacing: 0) {
@@ -634,9 +639,11 @@ struct ConfigRowContainer: View {
         )
         .opacity(isDragged ? 0.5 : 1.0)
         .scaleEffect(isDragged ? 0.97 : 1.0)
-        .background(GeometryReader { geometry in
-          Color.clear.preference(key: RowFrameKey.self, value: [currentPath: geometry.frame(in: .global)])
-        })
+        .background(
+          GeometryReader { geometry in
+            Color.clear.preference(
+              key: RowFrameKey.self, value: [currentPath: geometry.frame(in: .global)])
+          })
       } else {
         // Invisible placeholder to maintain spacing
         Rectangle()
@@ -645,26 +652,28 @@ struct ConfigRowContainer: View {
       }
     }
     .gesture(
-      DragGesture(minimumDistance: 10, coordinateSpace: .global)
-        .onChanged { value in
-          if dragState.draggedFromPath == nil {
-            withAnimation(Animation.easeOut(duration: 0.15)) {
-              startDrag(item, currentPath)
+      userConfig.isRearrangeModeEnabled
+        ? DragGesture(minimumDistance: 10, coordinateSpace: .global)
+          .onChanged { value in
+            if dragState.draggedFromPath == nil {
+              withAnimation(Animation.easeOut(duration: 0.15)) {
+                startDrag(item, currentPath)
+              }
+              NSCursor.closedHand.set()
             }
-            NSCursor.closedHand.set()
-          }
-          if dragState.draggedFromPath == currentPath {
-            handleGlobalDragMove(value)
-          }
-        }
-        .onEnded { _ in
-          if dragState.draggedFromPath == currentPath {
-            withAnimation(Animation.spring(response: 0.4, dampingFraction: 0.8)) {
-              endDrag()
+            if dragState.draggedFromPath == currentPath {
+              handleGlobalDragMove(value)
             }
           }
-          NSCursor.arrow.set()
-        }
+          .onEnded { _ in
+            if dragState.draggedFromPath == currentPath {
+              withAnimation(Animation.spring(response: 0.4, dampingFraction: 0.8)) {
+                endDrag()
+              }
+            }
+            NSCursor.arrow.set()
+          }
+        : nil
     )
   }
 }
@@ -897,7 +906,10 @@ struct ConfigEditorSheetView: View {
       PropertyInspectorView(
         selectedItem: selectedItemBinding,
         onDelete: onDelete,
-        onDuplicate: onDuplicate
+        onDuplicate: onDuplicate,
+        onCancel: {
+          // No need to do anything special on cancel from the inspector modal
+        }
       )
     }
   }
@@ -905,16 +917,15 @@ struct ConfigEditorSheetView: View {
   private var selectedItemBinding: Binding<ActionOrGroup?> {
     Binding<ActionOrGroup?>(
       get: {
-        guard let path = dragState.focusedItemPath else {
-          return nil
+        if let path = dragState.focusedItemPath {
+          return getItemAtPath(path, in: group)
         }
-        return getItemAtPath(path, in: group)
+        return nil
       },
-      set: { newValue in
-        guard let path = dragState.focusedItemPath, let newItem = newValue else { return }
-        var newGroup = self.group
-        setItemAtPath(&newGroup, path: path, item: newItem)
-        DispatchQueue.main.async {
+      set: { newItem in
+        if let path = dragState.focusedItemPath, let newItem = newItem {
+          var newGroup = self.group
+          setItemAtPath(&newGroup, path: path, item: newItem)
           self.group = newGroup
         }
       }
@@ -1529,11 +1540,43 @@ struct ActionOrGroupRow: View {
     HStack {
       rowContent
       Spacer()
-      Button("Edit") {
-        openSheet()
+      if userConfig.isRearrangeModeEnabled {
+        Button("Edit") {
+          openSheet()
+        }
+        .transition(.opacity.combined(with: .scale))
+        .padding(.trailing, generalPadding)
       }
-      .padding(.trailing, generalPadding)
     }
+    .background(
+      PopoverPresenter(
+        isPresented: $showInspectorPopover,
+        content: {
+          PropertyInspectorView(
+            selectedItem: Binding<ActionOrGroup?>(
+              get: { item },
+              set: { newItem in
+                if let newItem = newItem {
+                  item = newItem
+                }
+              }
+            ),
+            onDelete: onDelete,
+            onDuplicate: onDuplicate,
+            onCancel: {
+              // Cancel without saving changes
+              showInspectorPopover = false
+            }
+          )
+        },
+        preferredEdge: .minY,
+        anchorView: labelFieldAnchor,
+        onDismiss: {
+          // Popover was dismissed without clicking Done
+          showInspectorPopover = false
+        }
+      )
+    )
   }
 }
 
@@ -1636,40 +1679,24 @@ struct ActionRow: View {
               action = newAction
             }
           }
-        ))
-        .padding(.leading, 8)
-
-      TextField("", text: $action.label._orEmpty(), prompt: Text(action.bestGuessDisplayName))
-        .frame(width: 189, height: 24)
-        .padding(.leading, 8)
-        .textFieldStyle(.plain)
-        .background(
-          RoundedRectangle(cornerRadius: 5)
-            .fill(Color(.controlBackgroundColor))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-        .focused($isLabelFocused)
-        .background(ViewExtractor(nsView: $labelFieldAnchor))
-        .onChange(of: isLabelFocused) { focused in
-          if focused {
-            showInspectorPopover = true
-            dragState.focusedItemPath = path
-          }
+      )
+      .padding(.leading, 8)
+
+      LabelTextField(
+        text: $action.label._orEmpty(),
+        prompt: action.bestGuessDisplayName,
+        isLabelFocused: $isLabelFocused,
+        labelFieldAnchor: $labelFieldAnchor
+      )
+      .onChange(of: isLabelFocused) { focused in
+        if focused {
+          showInspectorPopover = true
+          dragState.focusedItemPath = path
         }
+      }
 
       Spacer()
-
-      Image(systemName: "line.3.horizontal")
-        .foregroundColor(.secondary)
-        .font(.caption)
-        .padding(.trailing, generalPadding / 2)
-        .onHover { hovering in
-          if hovering {
-            NSCursor.openHand.set()
-          } else {
-            NSCursor.arrow.set()
-          }
-        }
     }
     .background(
       PopoverPresenter(
@@ -1685,10 +1712,11 @@ struct ActionRow: View {
               }
             ),
             onDelete: {},
-            onDuplicate: {}
+            onDuplicate: {},
+            onCancel: {}
           )
         },
-        preferredEdge: .maxY,
+        preferredEdge: .minY,
         anchorView: labelFieldAnchor
       )
     )
@@ -1743,12 +1771,12 @@ struct GroupRow: View {
             .rotationEffect(.degrees(expandedGroups.contains(path) ? 90 : 0))
             .padding(4)
         }.buttonStyle(.plain)
-        .frame(width: 24, alignment: .center)
+          .frame(width: 24, alignment: .center)
 
         KeyButton(
           text: Binding(
-            get: { group.key ?? "" },
-            set: { group.key = $0 }
+            get: { self.group.key ?? "" },
+            set: { self.group.key = $0 }
           ),
           placeholder: "Group Key",
           validationError: validationErrorForKey,
@@ -1760,49 +1788,53 @@ struct GroupRow: View {
             userConfig.finishEditingKey()
           }
         )
+        .onTapGesture {
+          if !expandedGroups.contains(path) {
+            withAnimation(.easeOut(duration: 0.1)) {
+              expandedGroups.insert(path)
+            }
+          }
+        }
 
         IconPickerMenu(
           item: Binding(
-            get: { .group(group) },
+            get: { .group(self.group) },
             set: { newItem in
               if case .group(let newGroup) = newItem {
-                group = newGroup
+                self.group = newGroup
               }
             }
-          ))
-          .padding(.leading, 8)
-
-        TextField("Label", text: $group.label._orEmpty())
-          .frame(width: 189, height: 24)
-          .padding(.leading, 8)
-          .textFieldStyle(.plain)
-          .background(
-            RoundedRectangle(cornerRadius: 5)
-              .fill(Color(.controlBackgroundColor))
           )
-          .clipShape(RoundedRectangle(cornerRadius: 5))
-          .focused($isLabelFocused)
-          .background(ViewExtractor(nsView: $labelFieldAnchor))
-          .onChange(of: isLabelFocused) { focused in
-            if focused {
-              showInspectorPopover = true
-              dragState.focusedItemPath = path
+        )
+        .padding(.leading, 8)
+        .onTapGesture {
+          if !expandedGroups.contains(path) {
+            withAnimation(.easeOut(duration: 0.1)) {
+              expandedGroups.insert(path)
             }
           }
+        }
+
+        LabelTextField(
+          text: $group.label._orEmpty(),
+          prompt: "Label",
+          isLabelFocused: $isLabelFocused,
+          labelFieldAnchor: $labelFieldAnchor
+        )
+        .background(ViewExtractor(nsView: $labelFieldAnchor))
+        .onChange(of: isLabelFocused) { focused in
+          if focused {
+            showInspectorPopover = true
+            dragState.focusedItemPath = path
+            if !expandedGroups.contains(path) {
+              withAnimation(.easeOut(duration: 0.1)) {
+                expandedGroups.insert(path)
+              }
+            }
+          }
+        }
 
         Spacer(minLength: 0)
-
-        Image(systemName: "line.3.horizontal")
-          .foregroundColor(.secondary)
-          .font(.caption)
-          .padding(.trailing, generalPadding / 2)
-          .onHover { hovering in
-            if hovering {
-              NSCursor.openHand.set()
-            } else {
-              NSCursor.arrow.set()
-            }
-          }
       }
     }
     .padding(.horizontal, 0)
@@ -1820,10 +1852,11 @@ struct GroupRow: View {
               }
             ),
             onDelete: {},
-            onDuplicate: {}
+            onDuplicate: {},
+            onCancel: {}
           )
         },
-        preferredEdge: .maxY,
+        preferredEdge: .minY,
         anchorView: labelFieldAnchor
       )
     )
@@ -1846,19 +1879,19 @@ struct GroupRow: View {
 }
 
 struct ViewExtractor: NSViewRepresentable {
-    @Binding var nsView: NSView?
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            self.nsView = view.superview
-        }
-        return view
+  @Binding var nsView: NSView?
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView()
+    DispatchQueue.main.async {
+      self.nsView = view.superview
     }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            self.nsView = nsView.superview
-        }
+    return view
+  }
+  func updateNSView(_ nsView: NSView, context: Context) {
+    DispatchQueue.main.async {
+      self.nsView = nsView.superview
     }
+  }
 }
 
 #Preview {
@@ -1933,26 +1966,30 @@ struct PropertyInspectorView: View {
   @Environment(\.dismiss) private var dismiss
   let onDelete: () -> Void
   let onDuplicate: () -> Void
+  let onCancel: () -> Void
   @State private var showingDeleteConfirmation = false
+  @State private var localItem: ActionOrGroup?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Properties")
-        .font(.headline)
-        .padding(.bottom, 4)
-
-      if let selectedItem = selectedItem {
-        switch selectedItem {
+      if let item = localItem {
+        switch item {
         case .action(let action):
-          ActionDetailView(action: Binding(
-            get: { action },
-            set: { self.selectedItem = .action($0) }
-          ))
+          ActionDetailView(
+            action: Binding(
+              get: { action },
+              set: { newAction in
+                self.localItem = .action(newAction)
+              }
+            ))
         case .group(let group):
-          GroupDetailView(group: Binding(
-            get: { group },
-            set: { self.selectedItem = .group($0) }
-          ))
+          GroupDetailView(
+            group: Binding(
+              get: { group },
+              set: { newGroup in
+                self.localItem = .group(newGroup)
+              }
+            ))
         }
       } else {
         Text("Select an item to see its properties.")
@@ -1962,24 +1999,50 @@ struct PropertyInspectorView: View {
       Spacer()
 
       HStack {
-        Button(role: .destructive, action: {
-          showingDeleteConfirmation = true
-        }) {
-          Text("Delete")
+        Button(
+          role: .destructive,
+          action: {
+            showingDeleteConfirmation = true
+          }
+        ) {
+          Image(systemName: "trash")
         }
-        Spacer()
+        .help("Delete")
+
         Button(action: onDuplicate) {
-          Text("Duplicate")
+          Image(systemName: "doc.on.doc")
         }
+        .help("Duplicate")
+
+        Spacer()
+
+        Button("Cancel") {
+          onCancel()
+          dismiss()
+        }
+        .keyboardShortcut(.cancelAction)
+
         Button("Done") {
+          if let localItem = localItem {
+            selectedItem = localItem
+          }
           dismiss()
         }
         .keyboardShortcut(.defaultAction)
+        .buttonStyle(.borderedProminent)
       }
     }
     .padding()
     .background(Color(.windowBackgroundColor))
     .cornerRadius(8)
+    .onAppear {
+      localItem = selectedItem
+    }
+    .onChange(of: selectedItem) { oldValue, newValue in
+      if localItem == nil || oldValue != newValue {
+        localItem = newValue
+      }
+    }
     .alert(
       "Are you sure you want to delete this item?", isPresented: $showingDeleteConfirmation
     ) {
@@ -1997,12 +2060,46 @@ struct PropertyInspectorView: View {
 struct GroupDetailView: View {
   @Binding var group: Group
   @FocusState private var isLabelFocused: Bool
+  @State private var iconPickerPresented = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      SelectAllTextField(text: $group.label._orEmpty(), isFocused: $isLabelFocused)
-        .frame(height: 24)
-        .padding(.bottom, 5)
+      HStack(alignment: .center, spacing: 12) {
+        Menu {
+          Button("App Icon") {
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.applicationBundle, .application]
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.directoryURL = URL(fileURLWithPath: "/Applications")
+            if panel.runModal() == .OK {
+              var updatedGroup = group
+              updatedGroup.iconPath = panel.url?.path
+              group = updatedGroup
+            }
+          }
+          Button("Symbol") {
+            iconPickerPresented = true
+          }
+          Divider()
+          Button("✕ Clear") {
+            var updatedGroup = group
+            updatedGroup.iconPath = nil
+            group = updatedGroup
+          }
+        } label: {
+          actionIcon(item: .group(group), iconSize: NSSize(width: 60, height: 60))
+        }
+        .buttonStyle(PlainButtonStyle())
+        .frame(width: 60, height: 60)
+
+        SelectAllTextField(
+          text: $group.label._orEmpty(), isFocused: $isLabelFocused, placeholder: "Group"
+        )
+        .frame(height: 32)
+      }
+      .padding(.bottom, 8)
 
       Divider().padding(.vertical, 4)
 
@@ -2035,145 +2132,293 @@ struct GroupDetailView: View {
     .onAppear {
       isLabelFocused = true
     }
+    .sheet(isPresented: $iconPickerPresented) {
+      SymbolPicker(
+        symbol: Binding(
+          get: { group.iconPath },
+          set: { newPath in
+            var updatedGroup = group
+            updatedGroup.iconPath = newPath
+            group = updatedGroup
+          }
+        ))
+    }
   }
 }
 
 struct ActionDetailView: View {
-    @Binding var action: Action
-    @FocusState private var isLabelFocused: Bool
+  @Binding var action: Action
+  @FocusState private var isLabelFocused: Bool
+  @State private var localValues: [Type: String] = [:]
+  @State private var iconPickerPresented = false
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SelectAllTextField(text: $action.label._orEmpty(), isFocused: $isLabelFocused)
-                .frame(height: 24)
-                .padding(.bottom, 5)
-
-            Picker("Type", selection: $action.type) {
-                Text("Application").tag(Type.application)
-                Text("URL").tag(Type.url)
-                Text("Command").tag(Type.command)
-                Text("Folder").tag(Type.folder)
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .onChange(of: action.type) {
-                action.value = ""
-            }
-
-            HStack(alignment: .top) {
-                actionIcon(item: .action(action), iconSize: NSSize(width: 32, height: 32))
-                    .padding(.top, 4)
-
-                VStack(alignment: .leading) {
-                    switch action.type {
-                    case .application:
-                        TextField("Application Path", text: $action.value, prompt: Text("/Applications/Safari.app"))
-                            .truncationMode(.middle)
-                        Button("Choose…") {
-                            let panel = NSOpenPanel()
-                            panel.allowedContentTypes = [.application]
-                            panel.canChooseFiles = true
-                            panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK, let path = panel.url?.path {
-                                action.value = path
-                            }
-                        }
-                    case .folder:
-                        TextField("Folder Path", text: $action.value, prompt: Text("~/Downloads"))
-                            .truncationMode(.middle)
-                        Button("Choose…") {
-                            let panel = NSOpenPanel()
-                            panel.canChooseDirectories = true
-                            panel.canChooseFiles = false
-                            panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK, let path = panel.url?.path {
-                                action.value = path
-                            }
-                        }
-                    case .url:
-                        TextField("URL", text: $action.value, prompt: Text("https://apple.com"))
-                    case .command:
-                        TextField("Shell Command", text: $action.value, prompt: Text("for i in {1..3}; do say \"hello $i\"; done"))
-                    case .group:
-                        EmptyView()
-                    }
-                }
-            }
-        }
-        .onAppear {
-          isLabelFocused = true
-        }
+  private var currentBestGuessDisplayName: String {
+    let currentValue = action.value
+    switch action.type {
+    case .application:
+      return currentValue.isEmpty
+        ? "Application"
+        : (currentValue as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: "")
+    case .command:
+      return currentValue.isEmpty
+        ? "Command" : currentValue.components(separatedBy: " ").first ?? currentValue
+    case .folder:
+      return currentValue.isEmpty ? "Folder" : (currentValue as NSString).lastPathComponent
+    case .url:
+      return currentValue.isEmpty ? "URL" : "URL"
+    default:
+      return currentValue.isEmpty ? "Action" : currentValue
     }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .center, spacing: 12) {
+        Menu {
+          Button("App Icon") {
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.applicationBundle, .application]
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.directoryURL = URL(fileURLWithPath: "/Applications")
+            if panel.runModal() == .OK {
+              var updatedAction = action
+              updatedAction.iconPath = panel.url?.path
+              action = updatedAction
+            }
+          }
+          Button("Symbol") {
+            iconPickerPresented = true
+          }
+          Divider()
+          Button("✕ Clear") {
+            var updatedAction = action
+            updatedAction.iconPath = nil
+            action = updatedAction
+          }
+        } label: {
+          actionIcon(item: .action(action), iconSize: NSSize(width: 60, height: 60))
+        }
+        .buttonStyle(PlainButtonStyle())
+        .frame(width: 60, height: 60)
+
+        SelectAllTextField(
+          text: $action.label._orEmpty(), isFocused: $isLabelFocused,
+          placeholder: currentBestGuessDisplayName
+        )
+        .frame(height: 32)
+      }
+      .padding(.bottom, 8)
+
+      Picker("Type", selection: $action.type) {
+        Text("Application").tag(Type.application)
+        Text("URL").tag(Type.url)
+        Text("Command").tag(Type.command)
+        Text("Folder").tag(Type.folder)
+      }
+      .pickerStyle(SegmentedPickerStyle())
+      .onChange(of: action.type) { oldValue, newValue in
+        // Save the current value for the old type
+        localValues[oldValue] = action.value
+
+        // Load the saved value for the new type, or use empty string if none
+        let savedValue = localValues[newValue] ?? ""
+        var updatedAction = action
+        updatedAction.value = savedValue
+        action = updatedAction
+      }
+
+      VStack(alignment: .leading) {
+        switch action.type {
+        case .application:
+          TextField(
+            "Application Path", text: $action.value, prompt: Text("/Applications/Safari.app")
+          )
+          .truncationMode(.middle)
+          .onChange(of: action.value) { oldValue, newValue in
+            localValues[action.type] = newValue
+          }
+          Button("Choose…") {
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.application]
+            panel.canChooseFiles = true
+            panel.allowsMultipleSelection = false
+            if panel.runModal() == .OK, let path = panel.url?.path {
+              DispatchQueue.main.async {
+                // Save to local values for the current type
+                localValues[action.type] = path
+                var updatedAction = action
+                updatedAction.value = path
+                action = updatedAction
+              }
+            }
+          }
+        case .folder:
+          TextField("Folder Path", text: $action.value, prompt: Text("~/Downloads"))
+            .truncationMode(.middle)
+            .onChange(of: action.value) { oldValue, newValue in
+              localValues[action.type] = newValue
+            }
+          Button("Choose…") {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.allowsMultipleSelection = false
+            if panel.runModal() == .OK, let path = panel.url?.path {
+              DispatchQueue.main.async {
+                // Save to local values for the current type
+                localValues[action.type] = path
+                var updatedAction = action
+                updatedAction.value = path
+                action = updatedAction
+              }
+            }
+          }
+        case .url:
+          TextField("URL", text: $action.value, prompt: Text("https://apple.com"))
+            .onChange(of: action.value) { oldValue, newValue in
+              localValues[action.type] = newValue
+            }
+        case .command:
+          TextField(
+            "Shell Command", text: $action.value,
+            prompt: Text("for i in {1..3}; do say \"hello $i\"; done")
+          )
+          .onChange(of: action.value) { oldValue, newValue in
+            localValues[action.type] = newValue
+          }
+        case .group:
+          EmptyView()
+        }
+      }
+    }
+    .onAppear {
+      isLabelFocused = true
+      // Initialize local values with current action value
+      localValues[action.type] = action.value
+    }
+    .sheet(isPresented: $iconPickerPresented) {
+      SymbolPicker(
+        symbol: Binding(
+          get: { action.iconPath },
+          set: { newPath in
+            var updatedAction = action
+            updatedAction.iconPath = newPath
+            action = updatedAction
+          }
+        ))
+    }
+  }
 }
 
 struct SelectAllTextField: NSViewRepresentable {
+  @Binding var text: String
+  var isFocused: FocusState<Bool>.Binding
+  var placeholder: String = ""
+
+  func makeNSView(context: Context) -> NSTextField {
+    let textField = NSTextField(string: text)
+    textField.delegate = context.coordinator
+    textField.font = .systemFont(ofSize: 18, weight: .semibold)
+    textField.placeholderString = placeholder
+    textField.isBordered = true
+    textField.backgroundColor = .textBackgroundColor
+    textField.drawsBackground = true
+    textField.layer?.cornerRadius = 5.0
+    textField.layer?.borderWidth = 1.0
+    textField.layer?.borderColor = NSColor.separatorColor.cgColor
+    return textField
+  }
+
+  func updateNSView(_ nsView: NSTextField, context: Context) {
+    if nsView.stringValue != text {
+      nsView.stringValue = text
+    }
+    if nsView.placeholderString != placeholder {
+      nsView.placeholderString = placeholder
+    }
+    if isFocused.wrappedValue && !context.coordinator.isFirstResponder {
+      DispatchQueue.main.async {
+        nsView.window?.makeFirstResponder(nsView)
+      }
+    }
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(text: $text, isFocused: isFocused)
+  }
+
+  class Coordinator: NSObject, NSTextFieldDelegate {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
+    var isFirstResponder: Bool = false
 
-    func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField(string: text)
-        textField.delegate = context.coordinator
-        textField.font = .preferredFont(forTextStyle: .headline)
-        textField.isBordered = true
-        textField.backgroundColor = .textBackgroundColor
-        textField.drawsBackground = true
-        textField.layer?.cornerRadius = 5.0
-        textField.layer?.borderWidth = 1.0
-        textField.layer?.borderColor = NSColor.separatorColor.cgColor
-        return textField
+    init(text: Binding<String>, isFocused: FocusState<Bool>.Binding) {
+      _text = text
+      self.isFocused = isFocused
     }
 
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-        if isFocused.wrappedValue && !context.coordinator.isFirstResponder {
-             DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView)
-             }
-        }
+    func controlTextDidChange(_ obj: Notification) {
+      guard let textField = obj.object as? NSTextField else { return }
+      self.text = textField.stringValue
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isFocused: isFocused)
+    func controlDidBeginEditing(_ obj: Notification) {
+      guard let textField = obj.object as? NSTextField else { return }
+      isFirstResponder = true
+      textField.selectAll(nil)
     }
 
-    class Coordinator: NSObject, NSTextFieldDelegate {
-        @Binding var text: String
-        var isFocused: FocusState<Bool>.Binding
-        var isFirstResponder: Bool = false
-
-        init(text: Binding<String>, isFocused: FocusState<Bool>.Binding) {
-            _text = text
-            self.isFocused = isFocused
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let textField = obj.object as? NSTextField else { return }
-            self.text = textField.stringValue
-        }
-
-        func controlDidBeginEditing(_ obj: Notification) {
-            guard let textField = obj.object as? NSTextField else { return }
-            isFirstResponder = true
-            textField.selectAll(nil)
-        }
-
-        func controlDidEndEditing(_ obj: Notification) {
-            isFirstResponder = false
-            isFocused.wrappedValue = false
-        }
+    func controlDidEndEditing(_ obj: Notification) {
+      isFirstResponder = false
+      isFocused.wrappedValue = false
     }
+  }
+}
+
+struct LabelTextField: View {
+  @Binding var text: String
+  let prompt: String
+  let isLabelFocused: FocusState<Bool>.Binding
+  @Binding var labelFieldAnchor: NSView?
+  @State private var isHovered = false
+
+  var body: some View {
+    TextField("", text: $text, prompt: Text(prompt))
+      .frame(width: 189, height: 24)
+      .padding(.leading, 8)
+      .textFieldStyle(.plain)
+      .background(
+        RoundedRectangle(cornerRadius: 5)
+          .fill(Color(.controlBackgroundColor))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 5)
+          .stroke(
+            isHovered ? Color.primary.opacity(0.3) : Color.primary.opacity(0.15),
+            lineWidth: 0.5
+          )
+      )
+      .clipShape(RoundedRectangle(cornerRadius: 5))
+      .focused(isLabelFocused)
+      .onHover { hovering in
+        withAnimation(.easeInOut(duration: 0.15)) {
+          isHovered = hovering
+        }
+      }
+  }
 }
 
 extension Binding where Value == String? {
-    func _orEmpty() -> Binding<String> {
-        return Binding<String>(
-            get: {
-                return self.wrappedValue ?? ""
-            },
-            set: {
-                self.wrappedValue = $0.isEmpty ? nil : $0
-            }
-        )
-    }
+  func _orEmpty() -> Binding<String> {
+    return Binding<String>(
+      get: {
+        return self.wrappedValue ?? ""
+      },
+      set: {
+        self.wrappedValue = $0.isEmpty ? nil : $0
+      }
+    )
+  }
 }
