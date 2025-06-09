@@ -6,6 +6,7 @@ import SwiftUI
 import SymbolPicker
 
 let generalPadding: CGFloat = 8
+let expandButtonWidth: CGFloat = 24
 
 struct ItemPositionKey: PreferenceKey {
   static var defaultValue: CGPoint = .zero
@@ -312,6 +313,19 @@ struct AddButtons: View {
 
   var body: some View {
     HStack(spacing: generalPadding) {
+      // Invisible placeholder that matches the expand button exactly
+      Button {
+        // No action - this is just for spacing
+      } label: {
+        Image(systemName: "chevron.right")
+          .rotationEffect(.degrees(0))
+          .padding(4)
+      }
+      .buttonStyle(.plain)
+      .frame(width: expandButtonWidth, alignment: .center)
+      .opacity(0)
+      .allowsHitTesting(false)
+      
       Button(action: onAddAction) {
         Image(systemName: "rays")
         Text("Add action")
@@ -813,6 +827,63 @@ struct ConfigEditorSheetView: View {
 
   var body: some View {
     VStack(spacing: 0) {
+      // Toolbar with two segmented controls
+      HStack {
+        // Left side - File operations
+        HStack(spacing: 0) {
+          // Save button
+          Button(action: {
+            userConfig.saveConfig()
+          }) {
+            Image(systemName: "externaldrive")
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(SegmentedButtonStyle(position: .first))
+          .help("Save to file")
+          
+          // Reload button
+          Button(action: {
+            userConfig.reloadConfig()
+          }) {
+            Image(systemName: "arrow.clockwise")
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(SegmentedButtonStyle(position: .last))
+          .help("Reload from file")
+        }
+        
+        Spacer()
+        
+        // Right side - View controls
+        HStack(spacing: 0) {
+          // Expand All button
+          Button(action: {
+            withAnimation(.easeOut(duration: 0.1)) {
+              expandAllGroups(in: group, parentPath: [])
+            }
+          }) {
+            Image(systemName: "chevron.down")
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(SegmentedButtonStyle(position: .first))
+          .help("Expand all")
+          
+          // Collapse All button
+          Button(action: {
+            withAnimation(.easeOut(duration: 0.1)) {
+              expandedGroups.removeAll()
+            }
+          }) {
+            Image(systemName: "chevron.right")
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(SegmentedButtonStyle(position: .last))
+          .help("Collapse all")
+        }
+      }
+      .padding(.horizontal, generalPadding)
+      .padding(.vertical, 8)
+      
       ScrollView {
         GroupContentView(
           group: $group, isRoot: isRoot, parentPath: [], expandedGroups: $expandedGroups
@@ -1439,6 +1510,16 @@ struct ConfigEditorSheetView: View {
       }
     }
   }
+  
+  private func expandAllGroups(in group: Group, parentPath: [Int]) {
+    for (index, item) in group.actions.enumerated() {
+      let currentPath = parentPath + [index]
+      if case .group(let subgroup) = item {
+        expandedGroups.insert(currentPath)
+        expandAllGroups(in: subgroup, parentPath: currentPath)
+      }
+    }
+  }
 }
 
 struct ActionOrGroupRow: View {
@@ -1511,11 +1592,6 @@ struct ActionOrGroupRow: View {
           )
         }
       }
-      .background(
-        Rectangle()
-          .fill(rowBackgroundColor)
-          .cornerRadius(6)
-      )
       .onHover { hovering in
         if hovering {
           dragState.hoveredItemPath = path
@@ -1540,13 +1616,6 @@ struct ActionOrGroupRow: View {
     HStack {
       rowContent
       Spacer()
-      if userConfig.isRearrangeModeEnabled {
-        Button("Edit") {
-          openSheet()
-        }
-        .transition(.opacity.combined(with: .scale))
-        .padding(.trailing, generalPadding)
-      }
     }
     .background(
       PopoverPresenter(
@@ -1660,9 +1729,31 @@ struct ActionRow: View {
     dragState.focusedItemPath == path
   }
 
+  private var rowBackgroundColor: Color {
+    if isFocused {
+      return Color.accentColor.opacity(0.2)  // Selected
+    }
+    if dragState.hoveredItemPath == path {
+      return Color.primary.opacity(0.1)  // Hovered
+    }
+    return Color.clear  // Default
+  }
+
   var body: some View {
     HStack(spacing: generalPadding) {
-      Spacer().frame(width: 24)
+      // Invisible placeholder that matches the expand button exactly
+      Button {
+        // No action - this is just for spacing
+      } label: {
+        Image(systemName: "chevron.right")
+          .rotationEffect(.degrees(0))
+          .padding(4)
+      }
+      .buttonStyle(.plain)
+      .frame(width: expandButtonWidth, alignment: .center)
+      .opacity(0)
+      .allowsHitTesting(false)
+      
       KeyButton(
         text: Binding(
           get: { action.key ?? "" },
@@ -1681,7 +1772,7 @@ struct ActionRow: View {
           }
         )
       )
-      .padding(.leading, 8)
+      .padding(.leading, 32)
 
       LabelTextField(
         text: $action.label._orEmpty(),
@@ -1696,8 +1787,38 @@ struct ActionRow: View {
         }
       }
 
+      // 6-dot drag handle - always present but only visible when hovering
+      Image(systemName: "line.3.horizontal")
+        .foregroundColor(.secondary)
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .opacity(dragState.hoveredItemPath == path ? 1.0 : 0.0)
+        .animation(.easeInOut(duration: 0.15), value: dragState.hoveredItemPath)
+        .allowsHitTesting(dragState.hoveredItemPath == path)
+        .onHover { hovering in
+          if hovering {
+            NSCursor.openHand.set()
+          } else {
+            NSCursor.arrow.set()
+          }
+        }
+        .gesture(
+          DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { _ in
+              NSCursor.closedHand.set()
+            }
+            .onEnded { _ in
+              NSCursor.openHand.set()
+            }
+        )
+
       Spacer()
     }
+    .background(
+      Rectangle()
+        .fill(rowBackgroundColor)
+        .cornerRadius(6)
+    )
     .background(
       PopoverPresenter(
         isPresented: $showInspectorPopover,
@@ -1713,11 +1834,16 @@ struct ActionRow: View {
             ),
             onDelete: {},
             onDuplicate: {},
-            onCancel: {}
+            onCancel: {
+              showInspectorPopover = false
+            }
           )
         },
         preferredEdge: .minY,
-        anchorView: labelFieldAnchor
+        anchorView: labelFieldAnchor,
+        onDismiss: {
+          showInspectorPopover = false
+        }
       )
     )
   }
@@ -1752,6 +1878,16 @@ struct GroupRow: View {
     dragState.focusedItemPath == path
   }
 
+  private var rowBackgroundColor: Color {
+    if isFocused {
+      return Color.accentColor.opacity(0.2)  // Selected
+    }
+    if dragState.hoveredItemPath == path {
+      return Color.primary.opacity(0.1)  // Hovered
+    }
+    return Color.clear  // Default
+  }
+
   var body: some View {
     LazyVStack(spacing: generalPadding) {
       HStack(spacing: generalPadding) {
@@ -1771,7 +1907,7 @@ struct GroupRow: View {
             .rotationEffect(.degrees(expandedGroups.contains(path) ? 90 : 0))
             .padding(4)
         }.buttonStyle(.plain)
-          .frame(width: 24, alignment: .center)
+          .frame(width: expandButtonWidth, alignment: .center)
 
         KeyButton(
           text: Binding(
@@ -1806,7 +1942,7 @@ struct GroupRow: View {
             }
           )
         )
-        .padding(.leading, 8)
+        .padding(.leading, 32)
         .onTapGesture {
           if !expandedGroups.contains(path) {
             withAnimation(.easeOut(duration: 0.1)) {
@@ -1834,8 +1970,38 @@ struct GroupRow: View {
           }
         }
 
+        // 6-dot drag handle - always present but only visible when hovering
+        Image(systemName: "line.3.horizontal")
+          .foregroundColor(.secondary)
+          .font(.caption)
+          .padding(.horizontal, 8)
+          .opacity(dragState.hoveredItemPath == path ? 1.0 : 0.0)
+          .animation(.easeInOut(duration: 0.15), value: dragState.hoveredItemPath)
+          .allowsHitTesting(dragState.hoveredItemPath == path)
+          .onHover { hovering in
+            if hovering {
+              NSCursor.openHand.set()
+            } else {
+              NSCursor.arrow.set()
+            }
+          }
+          .gesture(
+            DragGesture(minimumDistance: 3, coordinateSpace: .global)
+              .onChanged { _ in
+                NSCursor.closedHand.set()
+              }
+              .onEnded { _ in
+                NSCursor.openHand.set()
+              }
+          )
+
         Spacer(minLength: 0)
       }
+      .background(
+        Rectangle()
+          .fill(rowBackgroundColor)
+          .cornerRadius(6)
+      )
     }
     .padding(.horizontal, 0)
     .background(
@@ -1853,11 +2019,16 @@ struct GroupRow: View {
             ),
             onDelete: {},
             onDuplicate: {},
-            onCancel: {}
+            onCancel: {
+              showInspectorPopover = false
+            }
           )
         },
         preferredEdge: .minY,
-        anchorView: labelFieldAnchor
+        anchorView: labelFieldAnchor,
+        onDismiss: {
+          showInspectorPopover = false
+        }
       )
     )
   }
@@ -1971,70 +2142,75 @@ struct PropertyInspectorView: View {
   @State private var localItem: ActionOrGroup?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      if let item = localItem {
-        switch item {
-        case .action(let action):
-          ActionDetailView(
-            action: Binding(
-              get: { action },
-              set: { newAction in
-                self.localItem = .action(newAction)
-              }
-            ))
-        case .group(let group):
-          GroupDetailView(
-            group: Binding(
-              get: { group },
-              set: { newGroup in
-                self.localItem = .group(newGroup)
-              }
-            ))
-        }
-      } else {
-        Text("Select an item to see its properties.")
-          .foregroundColor(.secondary)
-      }
-
-      Spacer()
-
+    VStack(spacing: 0) {
+      // Top bar with close button
       HStack {
-        Button(
-          role: .destructive,
-          action: {
-            showingDeleteConfirmation = true
-          }
-        ) {
-          Image(systemName: "trash")
-        }
-        .help("Delete")
-
-        Button(action: onDuplicate) {
-          Image(systemName: "doc.on.doc")
-        }
-        .help("Duplicate")
-
         Spacer()
-
-        Button("Cancel") {
-          onCancel()
-          dismiss()
-        }
-        .keyboardShortcut(.cancelAction)
-
-        Button("Done") {
+        Button(action: {
           if let localItem = localItem {
             selectedItem = localItem
           }
-          dismiss()
+          onCancel()
+        }) {
+          Image(systemName: "xmark")
+            .foregroundColor(.secondary)
+            .font(.system(size: 14, weight: .medium))
         }
-        .keyboardShortcut(.defaultAction)
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.borderless)
+        .help("Close")
       }
+      .padding(.horizontal, 20)
+      .padding(.top, 20)
+      
+      VStack(spacing: 16) {
+        if let item = localItem {
+          switch item {
+          case .action(let action):
+            ActionDetailView(
+              action: Binding(
+                get: { action },
+                set: { newAction in
+                  self.localItem = .action(newAction)
+                }
+              ),
+              onDelete: {
+                showingDeleteConfirmation = true
+              },
+              onDuplicate: onDuplicate
+            )
+          case .group(let group):
+            GroupDetailView(
+              group: Binding(
+                get: { group },
+                set: { newGroup in
+                  self.localItem = .group(newGroup)
+                }
+              ),
+              onDelete: {
+                showingDeleteConfirmation = true
+              },
+              onDuplicate: onDuplicate
+            )
+          }
+          
+        } else {
+          VStack(spacing: 8) {
+            Image(systemName: "gear")
+              .font(.system(size: 32))
+              .foregroundColor(.secondary)
+            Text("Select an item to see its properties.")
+              .font(.system(size: 12))
+              .foregroundColor(.secondary)
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+
+        Spacer()
+      }
+      .padding(.horizontal, 20)
+      .padding(.bottom, 20)
     }
-    .padding()
-    .background(Color(.windowBackgroundColor))
-    .cornerRadius(8)
+    .frame(minWidth: 300, maxWidth: 400, minHeight: 200, maxHeight: 600)
     .onAppear {
       localItem = selectedItem
     }
@@ -2061,73 +2237,121 @@ struct GroupDetailView: View {
   @Binding var group: Group
   @FocusState private var isLabelFocused: Bool
   @State private var iconPickerPresented = false
+  let onDelete: () -> Void
+  let onDuplicate: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack(alignment: .center, spacing: 12) {
-        Menu {
-          Button("App Icon") {
-            let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.applicationBundle, .application]
-            panel.canChooseFiles = true
-            panel.canChooseDirectories = true
-            panel.allowsMultipleSelection = false
-            panel.directoryURL = URL(fileURLWithPath: "/Applications")
-            if panel.runModal() == .OK {
+    VStack(alignment: .leading, spacing: 20) {
+      // Basic Information Section
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Text("Basic Information")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+          Spacer()
+        }
+
+        HStack(alignment: .center, spacing: 12) {
+          Menu {
+            Button("App Icon") {
+              let panel = NSOpenPanel()
+              panel.allowedContentTypes = [.applicationBundle, .application]
+              panel.canChooseFiles = true
+              panel.canChooseDirectories = true
+              panel.allowsMultipleSelection = false
+              panel.directoryURL = URL(fileURLWithPath: "/Applications")
+              if panel.runModal() == .OK {
+                var updatedGroup = group
+                updatedGroup.iconPath = panel.url?.path
+                group = updatedGroup
+              }
+            }
+            Button("Symbol") {
+              iconPickerPresented = true
+            }
+            Divider()
+            Button("✕ Clear") {
               var updatedGroup = group
-              updatedGroup.iconPath = panel.url?.path
+              updatedGroup.iconPath = nil
               group = updatedGroup
             }
+          } label: {
+            actionIcon(item: .group(group), iconSize: NSSize(width: 60, height: 60))
           }
-          Button("Symbol") {
-            iconPickerPresented = true
-          }
-          Divider()
-          Button("✕ Clear") {
-            var updatedGroup = group
-            updatedGroup.iconPath = nil
-            group = updatedGroup
-          }
-        } label: {
-          actionIcon(item: .group(group), iconSize: NSSize(width: 60, height: 60))
-        }
-        .buttonStyle(PlainButtonStyle())
-        .frame(width: 60, height: 60)
+          .buttonStyle(PlainButtonStyle())
+          .frame(width: 60, height: 60)
 
-        SelectAllTextField(
-          text: $group.label._orEmpty(), isFocused: $isLabelFocused, placeholder: "Group"
-        )
-        .frame(height: 32)
-      }
-      .padding(.bottom, 8)
+          VStack(alignment: .leading, spacing: 4) {
+            Text("Label")
+              .font(.system(size: 11, weight: .medium))
+              .foregroundColor(.secondary)
 
-      Divider().padding(.vertical, 4)
-
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Direct Access Shortcut")
-          .font(.headline)
-        Text(
-          "Optionally, set a global shortcut to open this group directly, bypassing the main window."
-        )
-        .font(.caption)
-        .foregroundColor(.secondary)
-
-        if let key = group.key, !key.isEmpty {
-          KeyboardShortcuts.Recorder(for: KeyboardShortcuts.Name("group-\(key)")) { shortcut in
-            if shortcut != nil {
-              Defaults[.groupShortcuts].insert(key)
-            } else {
-              Defaults[.groupShortcuts].remove(key)
+            SelectAllTextField(
+              text: $group.label._orEmpty(), isFocused: $isLabelFocused, placeholder: "Group"
+            )
+            .frame(height: 22)
+            
+            // Delete and copy buttons under label field
+            HStack(spacing: 8) {
+              Button(action: onDelete) {
+                Text("Delete")
+              }
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+              
+              Button(action: onDuplicate) {
+                Text("Duplicate")
+              }
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+              
+              Spacer()
             }
-            (NSApplication.shared.delegate as! AppDelegate).registerGlobalShortcuts()
-          }
-        } else {
-          Text("Set a 'Group Key' in the main list to enable direct access shortcuts.")
-            .font(.caption)
-            .foregroundColor(.secondary)
             .padding(.top, 4)
+          }
         }
       }
+      .padding(.horizontal, 4)
+
+      Divider()
+
+      // Shortcut Section
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Text("Direct Access Shortcut")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+          Spacer()
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+          Text(
+            "Optionally, set a global shortcut to open this group directly, bypassing the main window."
+          )
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+
+          if let key = group.key, !key.isEmpty {
+            KeyboardShortcuts.Recorder(for: KeyboardShortcuts.Name("group-\(key)")) { shortcut in
+              if shortcut != nil {
+                Defaults[.groupShortcuts].insert(key)
+              } else {
+                Defaults[.groupShortcuts].remove(key)
+              }
+              (NSApplication.shared.delegate as! AppDelegate).registerGlobalShortcuts()
+            }
+          } else {
+            Text("Set a 'Group Key' in the main list to enable direct access shortcuts.")
+              .font(.system(size: 11))
+              .foregroundColor(.secondary)
+              .italic()
+          }
+        }
+      }
+      .padding(.horizontal, 4)
+
+      Spacer()
     }
     .onAppear {
       isLabelFocused = true
@@ -2151,6 +2375,8 @@ struct ActionDetailView: View {
   @FocusState private var isLabelFocused: Bool
   @State private var localValues: [Type: String] = [:]
   @State private var iconPickerPresented = false
+  let onDelete: () -> Void
+  let onDuplicate: () -> Void
 
   private var currentBestGuessDisplayName: String {
     let currentValue = action.value
@@ -2171,127 +2397,257 @@ struct ActionDetailView: View {
     }
   }
 
+  private func selectType(_ newType: Type) {
+    let oldType = action.type
+
+    // Save the current value for the old type
+    localValues[oldType] = action.value
+
+    // Load the saved value for the new type, or use empty string if none
+    let savedValue = localValues[newType] ?? ""
+    var updatedAction = action
+    updatedAction.type = newType
+    updatedAction.value = savedValue
+    action = updatedAction
+  }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack(alignment: .center, spacing: 12) {
-        Menu {
-          Button("App Icon") {
-            let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.applicationBundle, .application]
-            panel.canChooseFiles = true
-            panel.canChooseDirectories = true
-            panel.allowsMultipleSelection = false
-            panel.directoryURL = URL(fileURLWithPath: "/Applications")
-            if panel.runModal() == .OK {
+    VStack(alignment: .leading, spacing: 20) {
+      // Basic Information Section
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Text("Basic Information")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+          Spacer()
+        }
+
+        HStack(alignment: .center, spacing: 12) {
+          Menu {
+            Button("App Icon") {
+              let panel = NSOpenPanel()
+              panel.allowedContentTypes = [.applicationBundle, .application]
+              panel.canChooseFiles = true
+              panel.canChooseDirectories = true
+              panel.allowsMultipleSelection = false
+              panel.directoryURL = URL(fileURLWithPath: "/Applications")
+              if panel.runModal() == .OK {
+                var updatedAction = action
+                updatedAction.iconPath = panel.url?.path
+                action = updatedAction
+              }
+            }
+            Button("Symbol") {
+              iconPickerPresented = true
+            }
+            Divider()
+            Button("✕ Clear") {
               var updatedAction = action
-              updatedAction.iconPath = panel.url?.path
+              updatedAction.iconPath = nil
               action = updatedAction
             }
+          } label: {
+            actionIcon(item: .action(action), iconSize: NSSize(width: 60, height: 60))
           }
-          Button("Symbol") {
-            iconPickerPresented = true
-          }
-          Divider()
-          Button("✕ Clear") {
-            var updatedAction = action
-            updatedAction.iconPath = nil
-            action = updatedAction
-          }
-        } label: {
-          actionIcon(item: .action(action), iconSize: NSSize(width: 60, height: 60))
-        }
-        .buttonStyle(PlainButtonStyle())
-        .frame(width: 60, height: 60)
+          .buttonStyle(PlainButtonStyle())
+          .frame(width: 60, height: 60)
 
-        SelectAllTextField(
-          text: $action.label._orEmpty(), isFocused: $isLabelFocused,
-          placeholder: currentBestGuessDisplayName
-        )
-        .frame(height: 32)
-      }
-      .padding(.bottom, 8)
+          VStack(alignment: .leading, spacing: 4) {
+            Text("Label")
+              .font(.system(size: 11, weight: .medium))
+              .foregroundColor(.secondary)
 
-      Picker("Type", selection: $action.type) {
-        Text("Application").tag(Type.application)
-        Text("URL").tag(Type.url)
-        Text("Command").tag(Type.command)
-        Text("Folder").tag(Type.folder)
-      }
-      .pickerStyle(SegmentedPickerStyle())
-      .onChange(of: action.type) { oldValue, newValue in
-        // Save the current value for the old type
-        localValues[oldValue] = action.value
-
-        // Load the saved value for the new type, or use empty string if none
-        let savedValue = localValues[newValue] ?? ""
-        var updatedAction = action
-        updatedAction.value = savedValue
-        action = updatedAction
-      }
-
-      VStack(alignment: .leading) {
-        switch action.type {
-        case .application:
-          TextField(
-            "Application Path", text: $action.value, prompt: Text("/Applications/Safari.app")
-          )
-          .truncationMode(.middle)
-          .onChange(of: action.value) { oldValue, newValue in
-            localValues[action.type] = newValue
-          }
-          Button("Choose…") {
-            let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.application]
-            panel.canChooseFiles = true
-            panel.allowsMultipleSelection = false
-            if panel.runModal() == .OK, let path = panel.url?.path {
-              DispatchQueue.main.async {
-                // Save to local values for the current type
-                localValues[action.type] = path
-                var updatedAction = action
-                updatedAction.value = path
-                action = updatedAction
+            SelectAllTextField(
+              text: $action.label._orEmpty(), isFocused: $isLabelFocused,
+              placeholder: currentBestGuessDisplayName
+            )
+            .frame(height: 22)
+            
+            // Delete and copy buttons under label field
+            HStack(spacing: 8) {
+              Button(action: onDelete) {
+                Text("Delete")
               }
-            }
-          }
-        case .folder:
-          TextField("Folder Path", text: $action.value, prompt: Text("~/Downloads"))
-            .truncationMode(.middle)
-            .onChange(of: action.value) { oldValue, newValue in
-              localValues[action.type] = newValue
-            }
-          Button("Choose…") {
-            let panel = NSOpenPanel()
-            panel.canChooseDirectories = true
-            panel.canChooseFiles = false
-            panel.allowsMultipleSelection = false
-            if panel.runModal() == .OK, let path = panel.url?.path {
-              DispatchQueue.main.async {
-                // Save to local values for the current type
-                localValues[action.type] = path
-                var updatedAction = action
-                updatedAction.value = path
-                action = updatedAction
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+              
+              Button(action: onDuplicate) {
+                Text("Duplicate")
               }
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+              
+              Spacer()
             }
+            .padding(.top, 4)
           }
-        case .url:
-          TextField("URL", text: $action.value, prompt: Text("https://apple.com"))
-            .onChange(of: action.value) { oldValue, newValue in
-              localValues[action.type] = newValue
-            }
-        case .command:
-          TextField(
-            "Shell Command", text: $action.value,
-            prompt: Text("for i in {1..3}; do say \"hello $i\"; done")
-          )
-          .onChange(of: action.value) { oldValue, newValue in
-            localValues[action.type] = newValue
-          }
-        case .group:
-          EmptyView()
         }
       }
+      .padding(.horizontal, 4)
+
+      Divider()
+
+      // Type Selection Section
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Text("Action Type")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+          Spacer()
+        }
+
+        HStack(spacing: 12) {
+          TypeButton(
+            type: .application,
+            icon: "app.fill",
+            label: "Application",
+            isSelected: action.type == .application,
+            onTap: { selectType(.application) }
+          )
+
+          TypeButton(
+            type: .url,
+            icon: "link",
+            label: "URL",
+            isSelected: action.type == .url,
+            onTap: { selectType(.url) }
+          )
+
+          TypeButton(
+            type: .command,
+            icon: "terminal",
+            label: "Command",
+            isSelected: action.type == .command,
+            onTap: { selectType(.command) }
+          )
+
+          TypeButton(
+            type: .folder,
+            icon: "folder",
+            label: "Folder",
+            isSelected: action.type == .folder,
+            onTap: { selectType(.folder) }
+          )
+        }
+      }
+      .padding(.horizontal, 4)
+
+      Divider()
+
+      // Configuration Section
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Text("Configuration")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+          Spacer()
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+          switch action.type {
+          case .application:
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Application Path")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+              HStack {
+                TextField(
+                  "", text: $action.value, prompt: Text("/Applications/Safari.app")
+                )
+                .textFieldStyle(.roundedBorder)
+                .truncationMode(.middle)
+                .onChange(of: action.value) { oldValue, newValue in
+                  localValues[action.type] = newValue
+                }
+
+                Button("Choose…") {
+                  let panel = NSOpenPanel()
+                  panel.allowedContentTypes = [.application]
+                  panel.canChooseFiles = true
+                  panel.allowsMultipleSelection = false
+                  if panel.runModal() == .OK, let path = panel.url?.path {
+                    DispatchQueue.main.async {
+                      localValues[action.type] = path
+                      var updatedAction = action
+                      updatedAction.value = path
+                      action = updatedAction
+                    }
+                  }
+                }
+                .controlSize(.small)
+              }
+            }
+
+          case .folder:
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Folder Path")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+              HStack {
+                TextField("", text: $action.value, prompt: Text("~/Downloads"))
+                  .textFieldStyle(.roundedBorder)
+                  .truncationMode(.middle)
+                  .onChange(of: action.value) { oldValue, newValue in
+                    localValues[action.type] = newValue
+                  }
+
+                Button("Choose…") {
+                  let panel = NSOpenPanel()
+                  panel.canChooseDirectories = true
+                  panel.canChooseFiles = false
+                  panel.allowsMultipleSelection = false
+                  if panel.runModal() == .OK, let path = panel.url?.path {
+                    DispatchQueue.main.async {
+                      localValues[action.type] = path
+                      var updatedAction = action
+                      updatedAction.value = path
+                      action = updatedAction
+                    }
+                  }
+                }
+                .controlSize(.small)
+              }
+            }
+
+          case .url:
+            VStack(alignment: .leading, spacing: 6) {
+              Text("URL")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+              TextField("", text: $action.value, prompt: Text("https://apple.com"))
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: action.value) { oldValue, newValue in
+                  localValues[action.type] = newValue
+                }
+            }
+
+          case .command:
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Shell Command")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+              TextField(
+                "", text: $action.value,
+                prompt: Text("for i in {1..3}; do say \"hello $i\"; done")
+              )
+              .textFieldStyle(.roundedBorder)
+              .onChange(of: action.value) { oldValue, newValue in
+                localValues[action.type] = newValue
+              }
+            }
+
+          case .group:
+            EmptyView()
+          }
+        }
+      }
+      .padding(.horizontal, 4)
+
+      Spacer()
     }
     .onAppear {
       isLabelFocused = true
@@ -2410,6 +2766,50 @@ struct LabelTextField: View {
   }
 }
 
+struct TypeButton: View {
+  let type: Type
+  let icon: String
+  let label: String
+  let isSelected: Bool
+  let onTap: () -> Void
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: onTap) {
+      VStack(spacing: 4) {
+        Image(systemName: icon)
+          .font(.system(size: 20))
+          .frame(width: 24, height: 24)
+
+        Text(label)
+          .font(.caption)
+          .lineLimit(1)
+      }
+      .frame(width: 70, height: 50)
+      .background(
+        RoundedRectangle(cornerRadius: 8)
+          .fill(isSelected ? Color.gray.opacity(0.3) : Color.clear)
+      )
+      .foregroundColor(foregroundColor)
+      .opacity(isSelected ? 1.0 : 0.6)
+    }
+    .buttonStyle(PlainButtonStyle())
+    .onHover { hovering in
+      withAnimation(.easeInOut(duration: 0.15)) {
+        isHovered = hovering
+      }
+    }
+  }
+
+  private var foregroundColor: Color {
+    if isSelected {
+      return Color.primary
+    } else {
+      return Color.primary
+    }
+  }
+}
+
 extension Binding where Value == String? {
   func _orEmpty() -> Binding<String> {
     return Binding<String>(
@@ -2420,5 +2820,89 @@ extension Binding where Value == String? {
         self.wrappedValue = $0.isEmpty ? nil : $0
       }
     )
+  }
+}
+
+// Custom button style for segmented control appearance
+struct SegmentedButtonStyle: ButtonStyle {
+  enum Position {
+    case first, middle, last, only
+  }
+  
+  let position: Position
+  @State private var isHovered = false
+  
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.system(size: 13))
+      .frame(height: 24)
+      .frame(minWidth: 60)
+      .foregroundColor(.primary)
+      .background {
+        switch position {
+        case .first:
+          UnevenRoundedRectangle(
+            topLeadingRadius: 6,
+            bottomLeadingRadius: 6,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0
+          )
+          .fill(backgroundColor(isPressed: configuration.isPressed))
+        case .middle:
+          Rectangle()
+            .fill(backgroundColor(isPressed: configuration.isPressed))
+        case .last:
+          UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 6,
+            topTrailingRadius: 6
+          )
+          .fill(backgroundColor(isPressed: configuration.isPressed))
+        case .only:
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(backgroundColor(isPressed: configuration.isPressed))
+        }
+      }
+      .overlay {
+        switch position {
+        case .first:
+          UnevenRoundedRectangle(
+            topLeadingRadius: 6,
+            bottomLeadingRadius: 6,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0
+          )
+          .stroke(Color.primary.opacity(0.3), lineWidth: 0.5)
+        case .middle:
+          Rectangle()
+            .stroke(Color.primary.opacity(0.3), lineWidth: 0.5)
+        case .last:
+          UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 6,
+            topTrailingRadius: 6
+          )
+          .stroke(Color.primary.opacity(0.3), lineWidth: 0.5)
+        case .only:
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .stroke(Color.primary.opacity(0.3), lineWidth: 0.5)
+        }
+      }
+      .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+      .onHover { hovering in
+        isHovered = hovering
+      }
+  }
+  
+  private func backgroundColor(isPressed: Bool) -> Color {
+    if isPressed {
+      return Color.primary.opacity(0.35)
+    } else if isHovered {
+      return Color.primary.opacity(0.2)
+    } else {
+      return Color.primary.opacity(0.08)
+    }
   }
 }
