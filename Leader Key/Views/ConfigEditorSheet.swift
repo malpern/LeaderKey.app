@@ -8,6 +8,86 @@ import SymbolPicker
 let generalPadding: CGFloat = 8
 let expandButtonWidth: CGFloat = 24
 
+struct ConfigEditorToolbar: NSViewRepresentable {
+  let onSave: () -> Void
+  let onReload: () -> Void
+  let onExpandAll: () -> Void
+  let onCollapseAll: () -> Void
+
+  func makeNSView(context: Context) -> NSView {
+    let containerView = NSView()
+    containerView.wantsLayer = true
+
+    let toolbar = NSSegmentedControl()
+    toolbar.segmentStyle = .texturedRounded
+    toolbar.trackingMode = .momentary
+    toolbar.segmentCount = 4
+    toolbar.controlSize = .large
+
+    // Configure segments
+    toolbar.setImage(NSImage(systemSymbolName: "externaldrive", accessibilityDescription: "Save"), forSegment: 0)
+    toolbar.setLabel("Save to file", forSegment: 0)
+    // toolbar.setToolTip("Save to file", forSegment: 0)
+
+    toolbar.setImage(NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Reload"), forSegment: 1)
+    toolbar.setLabel("Reload", forSegment: 1)
+    //toolbar.setToolTip("Reload from file", forSegment: 1)
+
+    toolbar.setImage(NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "Expand All"), forSegment: 2)
+    toolbar.setLabel("Expand all", forSegment: 2)
+    //toolbar.setToolTip("Expand all", forSegment: 2)
+
+    toolbar.setImage(NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Collapse All"), forSegment: 3)
+    toolbar.setLabel("Collapse all", forSegment: 3)
+    //toolbar.setToolTip("Collapse all", forSegment: 3)
+
+    toolbar.target = context.coordinator
+    toolbar.action = #selector(Coordinator.segmentClicked(_:))
+
+    // Add toolbar to container
+    containerView.addSubview(toolbar)
+    toolbar.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      toolbar.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+      toolbar.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+      containerView.heightAnchor.constraint(equalToConstant: 32)
+    ])
+
+    return containerView
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    // No updates needed
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(self)
+  }
+
+  class Coordinator: NSObject {
+    let parent: ConfigEditorToolbar
+
+    init(_ parent: ConfigEditorToolbar) {
+      self.parent = parent
+    }
+
+    @objc func segmentClicked(_ sender: NSSegmentedControl) {
+      switch sender.selectedSegment {
+      case 0:
+        parent.onSave()
+      case 1:
+        parent.onReload()
+      case 2:
+        parent.onExpandAll()
+      case 3:
+        parent.onCollapseAll()
+      default:
+        break
+      }
+    }
+  }
+}
+
 struct ItemPositionKey: PreferenceKey {
   static var defaultValue: CGPoint = .zero
   static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
@@ -313,19 +393,8 @@ struct AddButtons: View {
 
   var body: some View {
     HStack(spacing: generalPadding) {
-      // Invisible placeholder that matches the expand button exactly
-      Button {
-        // No action - this is just for spacing
-      } label: {
-        Image(systemName: "chevron.right")
-          .rotationEffect(.degrees(0))
-          .padding(4)
-      }
-      .buttonStyle(.plain)
-      .frame(width: expandButtonWidth, alignment: .center)
-      .opacity(0)
-      .allowsHitTesting(false)
-      
+      Spacer().frame(width: 30)
+
       Button(action: onAddAction) {
         Image(systemName: "rays")
         Text("Add action")
@@ -827,97 +896,58 @@ struct ConfigEditorSheetView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      // Toolbar with two segmented controls
-      HStack {
-        // Left side - File operations
-        HStack(spacing: 0) {
-          // Save button
-          Button(action: {
-            userConfig.saveConfig()
-          }) {
-            Image(systemName: "externaldrive")
-              .frame(maxWidth: .infinity)
+      // Toolbar
+      ConfigEditorToolbar(
+        onSave: { userConfig.saveConfig() },
+        onReload: { userConfig.reloadConfig() },
+        onExpandAll: {
+          withAnimation(.easeOut(duration: 0.1)) {
+            expandAllGroups(in: group, parentPath: [])
           }
-          .buttonStyle(SegmentedButtonStyle(position: .first))
-          .help("Save to file")
-          
-          // Reload button
-          Button(action: {
-            userConfig.reloadConfig()
-          }) {
-            Image(systemName: "arrow.clockwise")
-              .frame(maxWidth: .infinity)
+        },
+        onCollapseAll: {
+          withAnimation(.easeOut(duration: 0.1)) {
+            expandedGroups.removeAll()
           }
-          .buttonStyle(SegmentedButtonStyle(position: .last))
-          .help("Reload from file")
         }
-        
-        Spacer()
-        
-        // Right side - View controls
-        HStack(spacing: 0) {
-          // Expand All button
-          Button(action: {
-            withAnimation(.easeOut(duration: 0.1)) {
-              expandAllGroups(in: group, parentPath: [])
-            }
-          }) {
-            Image(systemName: "chevron.down")
-              .frame(maxWidth: .infinity)
-          }
-          .buttonStyle(SegmentedButtonStyle(position: .first))
-          .help("Expand all")
-          
-          // Collapse All button
-          Button(action: {
-            withAnimation(.easeOut(duration: 0.1)) {
-              expandedGroups.removeAll()
-            }
-          }) {
-            Image(systemName: "chevron.right")
-              .frame(maxWidth: .infinity)
-          }
-          .buttonStyle(SegmentedButtonStyle(position: .last))
-          .help("Collapse all")
-        }
-      }
-      .padding(.horizontal, generalPadding)
-      .padding(.vertical, 8)
-      
+      )
+
+      Divider()
+
       ScrollView {
-        GroupContentView(
-          group: $group, isRoot: isRoot, parentPath: [], expandedGroups: $expandedGroups
-        )
-        .environmentObject(dragState)
-        .onPreferenceChange(RowFrameKey.self) { frames in
-          self.rowFrames = frames
-        }
-        .onAppear {
-          // Set up global cross-hierarchy handlers
-          dragState.globalRemoveHandler = globalRemoveItem
-          dragState.globalInsertHandler = globalInsertItem
-          dragState.globalMoveHandler = globalMoveItem
-          dragState.updateDropTarget = self.updateDropTarget
-        }
-        .background(
-          KeyCapturingView(
-            onCommandUp: moveItemUp,
-            onCommandDown: moveItemDown,
-            onArrowUp: navigateUp,
-            onArrowDown: navigateDown,
-            onCommandRight: expandItem,
-            onCommandLeft: collapseItem
-          )
-        )
-        .padding(
-          EdgeInsets(
-            top: generalPadding, leading: generalPadding,
-            bottom: generalPadding, trailing: 0
-          )
-        )
+      GroupContentView(
+        group: $group, isRoot: isRoot, parentPath: [], expandedGroups: $expandedGroups
+      )
+      .environmentObject(dragState)
+      .onPreferenceChange(RowFrameKey.self) { frames in
+        self.rowFrames = frames
       }
+      .onAppear {
+        // Set up global cross-hierarchy handlers
+        dragState.globalRemoveHandler = globalRemoveItem
+        dragState.globalInsertHandler = globalInsertItem
+        dragState.globalMoveHandler = globalMoveItem
+        dragState.updateDropTarget = self.updateDropTarget
+      }
+      .background(
+        KeyCapturingView(
+          onCommandUp: moveItemUp,
+          onCommandDown: moveItemDown,
+          onArrowUp: navigateUp,
+          onArrowDown: navigateDown,
+          onCommandRight: expandItem,
+          onCommandLeft: collapseItem
+        )
+      )
+      .padding(
+        EdgeInsets(
+          top: generalPadding, leading: generalPadding,
+          bottom: generalPadding, trailing: 0
+        )
+      )
       .onChange(of: dragState.focusedItemPath) { path in
         isSheetPresented = path != nil
+      }
       }
     }
     .background(
@@ -1510,7 +1540,7 @@ struct ConfigEditorSheetView: View {
       }
     }
   }
-  
+
   private func expandAllGroups(in group: Group, parentPath: [Int]) {
     for (index, item) in group.actions.enumerated() {
       let currentPath = parentPath + [index]
@@ -1741,19 +1771,8 @@ struct ActionRow: View {
 
   var body: some View {
     HStack(spacing: generalPadding) {
-      // Invisible placeholder that matches the expand button exactly
-      Button {
-        // No action - this is just for spacing
-      } label: {
-        Image(systemName: "chevron.right")
-          .rotationEffect(.degrees(0))
-          .padding(4)
-      }
-      .buttonStyle(.plain)
-      .frame(width: expandButtonWidth, alignment: .center)
-      .opacity(0)
-      .allowsHitTesting(false)
-      
+      Spacer().frame(width: 30)
+
       KeyButton(
         text: Binding(
           get: { action.key ?? "" },
@@ -2161,7 +2180,7 @@ struct PropertyInspectorView: View {
       }
       .padding(.horizontal, 20)
       .padding(.top, 20)
-      
+
       VStack(spacing: 16) {
         if let item = localItem {
           switch item {
@@ -2192,7 +2211,7 @@ struct PropertyInspectorView: View {
               onDuplicate: onDuplicate
             )
           }
-          
+
         } else {
           VStack(spacing: 8) {
             Image(systemName: "gear")
@@ -2290,7 +2309,7 @@ struct GroupDetailView: View {
               text: $group.label._orEmpty(), isFocused: $isLabelFocused, placeholder: "Group"
             )
             .frame(height: 22)
-            
+
             // Delete and copy buttons under label field
             HStack(spacing: 8) {
               Button(action: onDelete) {
@@ -2298,13 +2317,13 @@ struct GroupDetailView: View {
               }
               .buttonStyle(.bordered)
               .controlSize(.small)
-              
+
               Button(action: onDuplicate) {
                 Text("Duplicate")
               }
               .buttonStyle(.bordered)
               .controlSize(.small)
-              
+
               Spacer()
             }
             .padding(.top, 4)
@@ -2462,7 +2481,7 @@ struct ActionDetailView: View {
               placeholder: currentBestGuessDisplayName
             )
             .frame(height: 22)
-            
+
             // Delete and copy buttons under label field
             HStack(spacing: 8) {
               Button(action: onDelete) {
@@ -2470,13 +2489,13 @@ struct ActionDetailView: View {
               }
               .buttonStyle(.bordered)
               .controlSize(.small)
-              
+
               Button(action: onDuplicate) {
                 Text("Duplicate")
               }
               .buttonStyle(.bordered)
               .controlSize(.small)
-              
+
               Spacer()
             }
             .padding(.top, 4)
@@ -2828,16 +2847,17 @@ struct SegmentedButtonStyle: ButtonStyle {
   enum Position {
     case first, middle, last, only
   }
-  
+
   let position: Position
   @State private var isHovered = false
-  
+
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 13))
       .frame(height: 24)
       .frame(minWidth: 60)
       .foregroundColor(.primary)
+      .contentShape(Rectangle())
       .background {
         switch position {
         case .first:
@@ -2895,7 +2915,7 @@ struct SegmentedButtonStyle: ButtonStyle {
         isHovered = hovering
       }
   }
-  
+
   private func backgroundColor(isPressed: Bool) -> Color {
     if isPressed {
       return Color.primary.opacity(0.35)
